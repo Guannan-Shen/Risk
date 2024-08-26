@@ -1,0 +1,204 @@
+---
+title: "Pilot Data Checklist"
+author: "Guannan Shen (Risk Rejection: Allhands)"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, 
+  output_dir = "../analysis_reports") })
+output: 
+  pdf_document: 
+    toc: false
+mainfont:: SourceSansPro
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE, cache = FALSE}
+require("knitr")
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+opts_chunk$set(engine = "R")
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(message = F)
+knitr::opts_chunk$set(warning = F)
+
+opts_knit$set(root.dir = getwd())
+                                                 
+```
+
+
+```{r libs}
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(expss)
+library(kableExtra)
+
+# helper functions
+source("./helper.R")
+source("./data_clean_time.R")
+source("./table_helper.R")
+source("./missing_helper.R")
+ # low-level grid functions are required
+options(stringsAsFactors = F)
+options(dplyr.width = Inf)
+
+## not in function
+'%nin%' <- Negate('%in%')
+
+# ######## clean memory ######################
+# rm(list = ls())
+# gc()
+# ls()
+# slotNames(x)
+# getSlots(x)
+
+```
+
+
+```{r data}
+# the processed main dataset
+data <- readRDS("../data/processing/data_labels.rds")
+# useful cols collection
+screening_cols <- c("PriorBreastCancer", "BreastRemoved", "ChestRad",
+                    "DCIS-LCIS", "BRCA1/2", "CowdenSyn", "LiFraumeni")
+# expected to be complete columns
+complete_cols <- c("Experimental condition", "abs_risk_rounded", 
+                   "abs_risk_pct", "abs_risk_lifetime_rounded",
+                   "abs_risk_age_group_rounded", "abs_risk_age_group_pct",
+                   "abs_risk_no_cancer_cohort", 
+                   "abs_risk_age_group_no_cancer_cohort",
+                   "50yr_absolute_risk",
+                   "50yr_absolute_risk_lifetime",
+                   "50yr_absolute_risk_age_group",
+                   "50yr_RR_Star1", "50yr_RR_Star2", "50yr_abs_risk_rounded",
+                   "50yr_abs_risk_pct", "50yr_abs_risk_lifetime_rounded",
+                   "50yr_abs_risk_age_group_rounded", 
+                   "50yr_abs_risk_age_group_pct", 
+                   "50yr_abs_risk_no_cancer_cohort",
+                   "abs_risk_relative_text",
+                   "50yr_abs_risk_age_group_no_cancer_cohort")
+# risk rejection related, better be complete
+risk_rej_cols <- c("Q1", "Q2","Q3","Q4","Q5","Q6", "Q7")
+# cross tabulation
+conditions <- c("Experimental condition", "Pre-estimate")
+
+# check both missingness and values 
+risk_comprehension <- c()
+
+# check related columns 
+
+
+```
+
+
+```{r targetingCol}
+# Risk Comprehension and Objective Numeracy items (columns MP-MQ, NA-NC).
+# excel_column_to_number("MP")
+data[,c(354, 355)]
+sapply(data[,c(354, 355)], var_lab)
+# excel_column_to_number("NA")
+data[,c(365, 366, 367)]
+sapply(data[,c(365, 366, 367)], var_lab)
+# 
+excel_column_to_number("DA")
+data[,c(105, 106)]
+excel_column_to_number("DG")
+data[,c(111, 112)]
+
+```
+
+# Data quality assurance checklist
+
+## Screening
+
+Participants who answer “yes” to any of the following questions 
+(columns L-R) should not have any other data (**Checklist 3**).
+
+
+```{r screening}
+data <- data %>% create_screen_label(screening_cols)
+
+dataNA <- data %>% filter(Pass_screening == "No")
+summarize_missingness(dataNA, complete_cols) %>% 
+  create_pdf_table(caption = 
+                  "Check Missingness: Risks (Subjects do not pass screening)")
+# risk rejection missing
+summarize_missingness(dataNA, risk_rej_cols) %>% 
+  create_pdf_table(caption = 
+          "Check Missingness: Risk Rejections (Subjects do not pass screening)")
+```
+
+
+```{r subset}
+data <- data %>% filter(Pass_screening == "Yes")
+```
+
+## After Screening
+
+### Check Group Design 
+
+Each category (1-3) should have approximately 30% of observations 
+(**Checklist 1**). The key question `Pre-estimate` have answers in only 2 of 
+the 3 experimental conditions, no answer for condition #3 (**Checklist 2**).
+
+
+```{r grouping}
+tab <- data %>% select(`Experimental condition`) %>% table(useNA = 'ifany')
+tab %>% create_pdf_table(caption = 
+                          "Check counts by experimental condition groups")
+round(prop.table(tab), 2) %>% create_pdf_table(caption = 
+                          "Check balanced grouping by experimental conditions")
+
+# # just simple crosstabulation, base R 'table' function
+tab <- data %>% select(all_of(conditions)) %>% table(useNA = 'ifany')
+
+# Generate a table formatted for PDF using kableExtra
+tab %>% create_pdf_table(caption = 
+                "Cross-tabulation of Experimental Condition and Pre-estimate",
+                    row_names = TRUE, label = TRUE)
+```
+
+### Check Missingness
+
+All participants should have data in the following personal risk 
+variables (**Checklist 4**), check missingness on risk rejection questions 
+(**Checklist 5**).
+
+
+```{r demonstration}
+## roughly equal grouping 
+
+# missingness
+# risk missing
+summarize_missingness(data, complete_cols) %>% 
+  create_pdf_table(caption = "Check Missingness: Risks")
+# risk rejection missing
+# tab1 <- summarize_missingness(data, risk_rej_cols)
+# row.names(tab1)
+
+summarize_missingness(data, risk_rej_cols) %>% 
+  create_pdf_table(caption = "Check Missingness: Risk Rejections")
+
+```
+
+
+### Check Related Columns
+
+```{r related}
+
+data$Q1a
+```
+
+
+### Check Values 
+
+```{r descriptive}
+# the age column 
+columns_to_summarize <-  c("QID30")  # Replace with your column names
+summarize_statistics(data, columns_to_summarize) %>% 
+             create_pdf_table(caption = "Descriptive Stats of Age")
+```
+
+
+```{r furthercheck}
+```
+
