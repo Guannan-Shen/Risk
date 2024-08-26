@@ -82,9 +82,15 @@ risk_rej_cols <- c("Q1", "Q2","Q3","Q4","Q5","Q6", "Q7")
 conditions <- c("Experimental condition", "Pre-estimate")
 
 # check both missingness and values 
-risk_comprehension <- c()
+# rename by column label
+risk_comprehension <- c("Q1.11", "Q2.11")
+risk_comp_label <- c("RComp1", "RComp2")
+
+object_num <- c("Q1.12", "Q2.12", "Q3.11")
+object_label <- c("ObjNum1", "ObjNum2", "ObjNum3")
 
 # check related columns 
+related_answers <- c("Q1.2", "Q1a", "Q2.2", "Q2a")
 
 
 ```
@@ -93,16 +99,17 @@ risk_comprehension <- c()
 ```{r targetingCol}
 # Risk Comprehension and Objective Numeracy items (columns MP-MQ, NA-NC).
 # excel_column_to_number("MP")
-data[,c(354, 355)]
-sapply(data[,c(354, 355)], var_lab)
+# data[,c(354, 355)]
+# sapply(data[,c(354, 355)], var_lab)
 # excel_column_to_number("NA")
-data[,c(365, 366, 367)]
-sapply(data[,c(365, 366, 367)], var_lab)
+# data[,c(365, 366, 367)]
+# sapply(data[,c(365, 366, 367)], var_lab)
 # 
-excel_column_to_number("DA")
-data[,c(105, 106)]
-excel_column_to_number("DG")
-data[,c(111, 112)]
+# excel_column_to_number("DA")
+# data[,c(105)]
+# data$Q1a
+# excel_column_to_number("DG")
+# data[,c(111, 112)]
 
 ```
 
@@ -184,8 +191,11 @@ summarize_missingness(data, risk_rej_cols) %>%
 ### Check Related Columns
 
 ```{r related}
+generate_missingness_flag(data, "Q1a")
+generate_missingness_flag(data, "Q2a")
 
-data$Q1a
+
+# data[["Q1a"]]
 ```
 
 
@@ -200,5 +210,15 @@ summarize_statistics(data, columns_to_summarize) %>%
 
 
 ```{r furthercheck}
+# check both missingness and values 
+# rename by column label
+# risk_comprehension <- c("Q1.11", "Q2.11")
+# risk_comp_label <- c("RComp1", "RComp2")
+
+# object_num <- c("Q1.12", "Q2.12", "Q3.11")
+# object_label <- c("ObjNum1", "ObjNum2", "ObjNum3")
+
+rename_columns_by_labels(data, risk_comprehension)
+rename_columns_by_labels(data, object_num)
 ```
 
