@@ -106,7 +106,7 @@ related_answers <- c("Q1.2", "Q1a", "Q2.2", "Q2a")
 # sapply(data[,c(365, 366, 367)], var_lab)
 # 
 # excel_column_to_number("DA")
-# data[,c(105)]
+# data[,c(105, 106)]
 # data$Q1a
 # excel_column_to_number("DG")
 # data[,c(111, 112)]
@@ -191,8 +191,25 @@ summarize_missingness(data, risk_rej_cols) %>%
 ### Check Related Columns
 
 ```{r related}
-generate_missingness_flag(data, "Q1a")
-generate_missingness_flag(data, "Q2a")
+# # check related columns 
+# related_answers <- c("Q1.2", "Q1a", "Q2.2", "Q2a")
+# change column name by labels 
+df1 <- generate_missingness_flag(data, "Q1a")
+
+tab <- df1 %>% select(all_of(c("Q1.2", 
+                                "missingness_Q1a"))) %>% 
+                  table(useNA = 'ifany')
+tab %>% create_pdf_table(caption = 
+                "Cross-tabulation of Beliefs free response and Q1 answer",
+                    row_names = TRUE, label = TRUE)
+
+df2 <- generate_missingness_flag(data, "Q2a")
+tab <- df2 %>% select(all_of(c("Q2.2", 
+                                "missingness_Q2a"))) %>% 
+                  table(useNA = 'ifany')
+tab %>% create_pdf_table(caption = 
+                "Cross-tabulation of Beliefs2 and Q2 answer",
+                    row_names = TRUE, label = TRUE)
 
 
 # data[["Q1a"]]
@@ -218,7 +235,29 @@ summarize_statistics(data, columns_to_summarize) %>%
 # object_num <- c("Q1.12", "Q2.12", "Q3.11")
 # object_label <- c("ObjNum1", "ObjNum2", "ObjNum3")
 
-rename_columns_by_labels(data, risk_comprehension)
-rename_columns_by_labels(data, object_num)
+df1 <- rename_columns_by_labels(data, risk_comprehension)
+
+summarize_missingness(df1, risk_comp_label) %>% 
+  create_pdf_table(caption = "Check Missingness: Risks Comprehension")
+
+summarize_statistics(df1, "RComp1") %>% 
+             create_pdf_table(caption = "Descriptive Stats of Risks Comprehension", font_size = 8)
+
+summarize_statistics(df1, "RComp2") %>% 
+             create_pdf_table(caption = "Descriptive Stats of Risks Comprehension", font_size = 8)
+
+
+df2 <- rename_columns_by_labels(data, object_num)
+
+summarize_missingness(df2, object_label) %>% 
+  create_pdf_table(caption = "Check Missingness: ObjNums")
+
+summarize_statistics(df2, "ObjNum1") %>% 
+             create_pdf_table(caption = "Descriptive Stats of Obj Nums", font_size = 8)
+summarize_statistics(df2, "ObjNum2") %>% 
+             create_pdf_table(caption = "Descriptive Stats of Obj Nums", font_size = 8)
+summarize_statistics(df2, "ObjNum3") %>% 
+             create_pdf_table(caption = "Descriptive Stats of Obj Nums", font_size = 8)
+
 ```
 
