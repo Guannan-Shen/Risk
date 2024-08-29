@@ -33,6 +33,7 @@ export_character_only <- function(file_path, out_path){
                  as.character() %>% make.unique()
   data = read_csv(file_path, skip = 2, col_names = FALSE) 
   names(data) = variable_names
+  # TODO: add label to text only dataset 
   write_csv(data %>% select(where(is.character)), out_path)
 } 
 
