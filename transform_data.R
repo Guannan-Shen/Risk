@@ -31,10 +31,15 @@ export_character_only <- function(file_path, out_path){
   variable_names = read_csv(file_path, skip = 0, 
                             n_max = 1, col_names = FALSE) %>% 
                  as.character() %>% make.unique()
+  # FIXed: add label to text only dataset 
+  variable_label = read_csv(file_path, skip = 1, 
+                            n_max = 1, col_names = FALSE) %>% 
+                 as.character() %>% make.unique()
   data = read_csv(file_path, skip = 2, col_names = FALSE) 
   names(data) = variable_names
-  # TODO: add label to text only dataset 
-  write_csv(data %>% select(where(is.character)), out_path)
+  
+  write_csv(rbind(variable_label[unlist(lapply(data,is.character))]
+    ,data %>% select(where(is.character))), out_path)
 } 
 
 # TODO: test
@@ -43,3 +48,5 @@ export_no_timer("../data/raw_data/Pilot Risk soft launch data_numeric values.csv
 
 export_character_only("../data/processing/no_time_pilot_risk_soft.csv",
                       "../data/processing/text_only_pilot_risk_soft.csv")
+
+
