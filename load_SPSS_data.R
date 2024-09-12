@@ -30,10 +30,10 @@ load_var_label <- function(file_path) {
   return(data)
 }
 
-# Example usage:
-file_path = "../data/raw_data/Pilot Risk soft launch data_numeric values.csv"  
-cleaned_data = load_var_label(file_path)
-saveRDS(cleaned_data, "../data/processing/data_labels.rds")
+# # Example usage:
+# file_path = "../data/raw_data/Pilot Risk soft launch data_numeric values.csv"  
+# cleaned_data = load_var_label(file_path)
+# saveRDS(cleaned_data, "../data/processing/data_labels.rds")
 # Inspect the cleaned data
 # view(cleaned_data)
 # sapply(cleaned_data, var_lab)

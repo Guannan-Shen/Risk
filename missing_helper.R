@@ -1,5 +1,8 @@
 library(tidyverse)
 
+# filter data by rows by screening questions/ missingness 
+
+
 # generate missing flag corresponding to a certain column 
 generate_missingness_flag = function(data, column_name) {
   # Create the dynamic column name
@@ -27,8 +30,8 @@ summarize_missingness = function(data, columns_to_check) {
     select(all_of(columns_to_check)) %>%  # Select only the specified columns
     summarise(across(everything(), ~ sum(is.na(.)))) %>%  # Count missing values by column
     pivot_longer(cols = everything(), 
-                 names_to = "Column", values_to = "Missing_Count") %>%
-    mutate(Missingness_percentage = paste0(round((Missing_Count / nrow(data)) * 100, 2), 
+                 names_to = "Columns", values_to = "Missing_Count") %>%
+    mutate(Missing_percentage = paste0(round((Missing_Count / nrow(data)) * 100, 2), 
                                            "%")) %>%
     arrange(desc(Missing_Count))  # Arrange by highest missing values
   

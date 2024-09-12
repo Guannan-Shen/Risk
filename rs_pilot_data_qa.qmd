@@ -1,0 +1,372 @@
+---
+title: "Risk Skepticism Survey Pilot Study"
+subtitle: "Data Quality Inspection"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(ggthemes) # for color blind 
+library(naniar)
+library(visdat)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+```
+
+# Data Cleaning Process
+
+## Raw Data
+
+```{r}
+#| label: cleaning
+#| include: false
+
+# The data was processed in rs_pilot_load.R
+raw_data <- readRDS("../data/processing/rs_pilot_labels_processed.rds")
+```
+
+There are `r dim(raw_data)[1]` subjects participated in this survey, and the raw dataset has `r dim(raw_data)[2]` columns. 
+
+## Screening
+
+```{r}
+#| label: screening 
+raw_data %<>% create_screen_label(screening_cols)
+
+# Example of applying it to 'Pass_screening' column
+freq_html_table(raw_data, "Pass_screening")
+fail_screening_df <- readRDS("../data/processing/rs_pilot_fail_screening.rds")
+pass_screening_df <- readRDS("../data/processing/rs_pilot_pass_screening.rds")
+
+summarize_missingness(fail_screening_df, risks_cols) %>%
+     create_basic_html_table(title = 
+                        "Check Missingness: Risks (screening failed)")
+
+summarize_missingness(fail_screening_df, risk_rej_cols) %>%
+     create_basic_html_table(title = 
+                        "Check Missingness: Risks Rejections (screening failed)")
+
+screening_result <- table(raw_data$Pass_screening, useNA = "ifany")
+```
+
+
+For `r screening_result[3]` subjects with completely missing data (even the screening answers are missing). Those `r screening_result[3]` subjects are excluded from the dataset.
+
+### With Screening
+
+`r screening_result["No"]` subjects who did not pass the screening were excluded from the dataset. 
+
+### Check Group Design 
+
+Each category (1-3) should have approximately 30% of observations 
+(**Checklist 1**). The key question `Pre-estimate` have answers in only 2 of 
+the 3 experimental conditions, no answer for condition #3 (**Checklist 2**).
+
+```{r}
+#| label: grouping
+pass_screening_df %>% freq_html_table(conditions[1])
+
+
+# there are missingness in Experimental Condition
+pass_screening_df %<>% generate_missingness_flag(conditions[1])
+
+cross_freq_html_table_counts(pass_screening_df,
+                      "missingness_Experimental condition", "Finished")
+
+summarize_missingness(pass_screening_df %>%
+                        filter(is.na(`Experimental condition`)), 
+                      risks_cols) %>%
+     create_basic_html_table(title = 
+                        "Check Missingness: Risks (No Experimental Condition)")
+
+summarize_missingness(pass_screening_df %>%
+                        filter(is.na(`Experimental condition`)), 
+                      risk_rej_cols) %>%
+     create_basic_html_table(title = 
+                        "Check Missingness: Risks Rejections (No Experimental Condition)")
+
+condition_result <- table(pass_screening_df$`Experimental condition`, 
+                          useNA = "ifany")
+
+# exclude missing in Experimental Condition
+
+data <- readRDS("../data/processing/rs_pilot_have_experiment.rds")
+
+```
+
+There are missingness in **Experimental Condition**. Based on above result, `r condition_result[4]` subjects who did not have Experimental Condition were excluded from the dataset.
+
+
+Now the **sample size is `r dim(data)[1]`**. 
+
+```{r}
+#| label: moregrouping
+
+
+cross_freq_html_table_counts(data,
+                      conditions[1], conditions[2])
+
+summarize_missingness(data, 
+                      risks_cols) %>%
+     create_basic_html_table(title = 
+                        "Check Missingness: Risks")
+
+summarize_missingness(data, 
+                      risk_rej_cols) %>%
+     create_basic_html_table(title = 
+                        "Check Missingness: Risks Rejections")
+
+```
+
+
+```{r}
+#| label: badpre_estimate
+
+# to filter out using                         
+# filter((is.na(`Pre-estimate`) &`Experimental condition` != 3))
+summarize_missingness(data %>% filter((is.na(`Pre-estimate`) 
+                                       &`Experimental condition` != 3)), 
+                      risks_cols) %>%
+     create_basic_html_table(title = 
+                    "Check Missingness: Risks (Pre-estimate wrong missing)")
+
+summarize_missingness(data %>% filter((is.na(`Pre-estimate`) 
+                                       &`Experimental condition` != 3)), 
+                      risk_rej_cols) %>%
+     create_basic_html_table(title = 
+                   "Check Missingness: Risks Rejections (Pre-estimate wrong missing)")
+
+wrong_pre_estimate <- data %>% filter((is.na(`Pre-estimate`) 
+                          &`Experimental condition` != 3)) %>% dim()
+
+raw_df <- readRDS("../data/processing/rs_pilot_good_preestimate.rds")
+
+```
+
+Based on the above missingness analysis, the `r wrong_pre_estimate[1]` subjects with wrong pre-estimate missingness are excluded from the dataset. 
+
+Now, the **sample size is `r dim(raw_df)[1]`.**
+
+## Missingness Pattern
+
+The Upper graph is the missingness heatmap for experimental condition columns, `r length(risks_cols) - 1` risks columns and, `r length(risk_rej_cols)` risk rejection columns, of all `r dim(raw_df)[1]` subjects. 
+
+The lower graph is the missingness heatmap for the same population, but for all columns other than "timer" related columns. 
+
+```{r}
+#| label: missingpattern
+
+vis_miss(raw_df %>% select(all_of(c( risks_cols, risk_rej_cols) )))
+vis_miss( raw_df %>% remove_time_columns())
+
+# this is calculate missing_percentage per obs for risks and risk rejections 
+
+raw_df %<>% mutate(total_missing_prop_obs = 
+                         round(rowMeans(is.na(.)), 4))
+
+missing_flag_df <- raw_df %>% select(all_of(c( risks_cols[2: length(risks_cols)], 
+                                               risk_rej_cols))) %>% 
+                mutate(risks_missing_prop_obs = 
+                         round(rowMeans(is.na(.)), 4))
+
+raw_df %<>% mutate(risks_missing_prop_obs = missing_flag_df$risks_missing_prop_obs)
+
+# TODO: important save dataset, raw_df with missingness flag 
+# saveRDS(raw_df, "../data/processing/rs_pilot_good_esti_missing_flag.rds")
+            
+raw_df %>%  select(ResponseId, risks_missing_prop_obs, 
+                   total_missing_prop_obs) %>% 
+            arrange(desc(risks_missing_prop_obs),
+                     desc(total_missing_prop_obs )) %>%
+  # TODO: this filter criteria is subjective 
+          filter(risks_missing_prop_obs > 0 | 
+                   total_missing_prop_obs > 0.1) %>% 
+         gt() %>%
+    tab_header(
+        title = "Missingness proportion per observation",
+      subtitle = "risks_missing_prop_obs > 0 OR total_missing_prop_obs > 0.095 
+             (1.0000 means 100% missing)"
+       ) %>%
+  tab_style(
+    style = list( cell_fill(color = "#c78a81"),  # Set the color for the rows
+              cell_text(color = "white") ),
+    locations = cells_body(
+      rows = risks_missing_prop_obs >= 0.25  # Apply the style where condition is met
+    )
+  ) %>%
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_column_labels()
+    )
+
+# check number of observations with worse missingness
+worst_missing_df <- raw_df %>% filter(risks_missing_prop_obs > 0.25)
+
+```
+### Missingness First Impression 
+
+Based on the missingness pattern heatmap, we can tell, some observations have abnormally consistent missing values. Those observations are likely to have missingness for most of their input values. Thus, the above missingness proportion per observation table was generated, and only subjects with missing proportion "risks_missing_prop_obs > 0 OR total_missing_prop_obs > 0.095" were shown in the table. The risks_missing_prop_obs is the measurement of missingness for `r length(risks_cols) - 1` risks columns and `r length(risk_rej_cols)` risk rejections cols. The total_missing_prop_obs is the measurement of overall missingness including more than 500 columns. 
+
+
+## Subjects Filtering According to Missingness 
+
+Based on the above table, there are **`r dim(worst_missing_df)[1]` subjects** with obvious worst sparsity, colored in red.
+
+Further demonstration of missingness pattern in the most sparse subset and remaining subset are shown below.
+
+### Missingness Pattern of the Most Sparse Subset
+
+Upper figure for `r length(risks_cols) - 1` risks columns and `r length(risk_rej_cols)` risk rejections cols.
+
+Lower figure for all columns after excluding "timer" related columns. 
+
+```{r}
+#| label: worstmissing
+
+vis_miss(worst_missing_df %>% select(all_of(c( risks_cols, risk_rej_cols) )))
+vis_miss(worst_missing_df  %>% remove_time_columns() ) 
+# TODO: missingness pattern, test relation between missingness and speeder
+
+# check number of observations with worse missingness
+no_worst_missing_df <- raw_df %>% filter(risks_missing_prop_obs <= 0.25)
+
+# # TODO: important, save dataset 
+# saveRDS(no_worst_missing_df, 
+#           "../data/processing/rs_pilot_no_worst_missing.rds")
+```
+
+
+### Missingness Pattern of the Remaining Subset 
+
+After filtering out the most incomplete subset, the **sample size now is `r dim(no_worst_missing_df)[1]`**.
+
+Upper figure for `r length(risks_cols) - 1` risks columns and `r length(risk_rej_cols)` risk rejections cols.
+
+Lower figure for all columns after excluding "timer" related columns. 
+
+Then, check missingness by observation again, using table. 
+
+At last, double check the balanced group design.
+
+
+
+```{r}
+#| label: noworstmissing
+
+no_worst_missing_df <- readRDS("../data/processing/rs_pilot_no_worst_missing.rds")
+
+vis_miss(no_worst_missing_df %>% select(all_of(c( risks_cols, risk_rej_cols) )))
+vis_miss(no_worst_missing_df  %>% remove_time_columns() ) 
+
+# Display other missingness 
+no_worst_missing_df %>%  select(ResponseId, risks_missing_prop_obs, 
+                   total_missing_prop_obs) %>% 
+            arrange(desc(total_missing_prop_obs), 
+                    desc(risks_missing_prop_obs)) %>% 
+              filter(risks_missing_prop_obs > 0 | 
+                       total_missing_prop_obs > 0.1) %>% 
+                  gt() %>%
+      tab_header(
+        title = "Missingness proportion per observation (After Exclusion the Worst Missing)",
+      subtitle = "risks_missing_prop_obs > 0 OR total_missing_prop_obs > 0.095 
+             (1.0000 means 100% missing)"
+       ) %>%
+  tab_style(
+    style = list( cell_fill(color = "#c78a81"),  # Set the color for the rows
+              cell_text(color = "white") ),
+    locations = cells_body(
+      rows = total_missing_prop_obs >= 0.4  # Apply the style where condition is met
+    )
+     ) %>%
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_column_labels()
+    )
+
+# check balanced group
+no_worst_missing_df %>% freq_html_table(conditions[1])
+
+cross_freq_html_table_counts(no_worst_missing_df,
+                      conditions[1], conditions[2])
+
+```
+
+# Conclusion
+
+**The above missingness pattern figures and table suggest the dataset may require further filtering.** This might need a group discussion. 
+
+```{dot}
+digraph consort_diagram {
+
+  # Define graph direction
+  rankdir=TB;
+
+  # Define node attributes
+  node [shape=box, style=filled, fillcolor=white, 
+           fontname=Helvetica, fontsize=13, fontweight=bold];
+
+  # Define the nodes
+  A [label="703 Subjects participated in the survey"];
+  B [label="Exclude 9 subjects with completely missing data\neven screening answers"];
+  C [label="Exclude 70 subjects who did not pass the screening"];
+  D [label="Exclude 15 subjects with missing Experimental Condition"];
+  E [label="Exclude 8 subjects with wrong pre-estimate missingness"];
+  F [label="Exclude 43 subjects with worst sparsity"];
+  G [label="558 Subjects remaining"];
+
+  # Define the edges
+  A -> B;
+  B -> C;
+  C -> D;
+  D -> E;
+  E -> F;
+  F -> G;
+}
+```
+
+
+
+```{r}
+#| label: test
+
+
+# & 
+#                                  `Experimental Condition` != 3
+```
+
