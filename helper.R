@@ -1,3 +1,6 @@
+# WARINING: library expss mask libray gt(), always use gt::gt()
+library(expss) # this is for var_lab
+
 # Function to convert Excel-style column reference (like "QT") to a numeric index
 excel_column_to_number = function(column_ref) {
   column_ref = toupper(column_ref)  # Ensure the reference is in uppercase
@@ -32,7 +35,7 @@ create_screen_label = function(data, screening_cols) {
 
 
 # Function to summarize descriptive statistics for selected columns with optional renaming by labels
-summarize_statistics = function(data, columns_to_summarize, rename_by_label = TRUE) {
+summarize_statistics = function(data, columns_to_summarize, rename_by_label = FALSE) {
   # Ensure the specified columns are present in the data
   columns_to_summarize = intersect(columns_to_summarize, names(data))
   
@@ -48,8 +51,7 @@ summarize_statistics = function(data, columns_to_summarize, rename_by_label = TR
   
   # Optionally rename columns by variable labels before summary
   if (rename_by_label && !is.null(labels)) {
-    data_selected = data_selected %>%
-      rename_with(.fn = ~ labels[.x], .cols = everything())
+    names(data_selected) <- labels
   }
   
   # Calculate descriptive statistics
@@ -65,10 +67,18 @@ summarize_statistics = function(data, columns_to_summarize, rename_by_label = TR
         sd = ~ sd(. , na.rm = TRUE),
         n_missing = ~ sum(is.na(.))
       ),
-      .names = "{col}_{fn}"
+      .names = "{fn}"
     ))
   
   # Return the summarized statistics
+  # the median column is s3 labelled
+  # Remove any `labelled` class from all columns
+  # summary_stats <- summary_stats %>% mutate(across(everything(), ~ unclass(.)))
+  # colnames(summary_stats) <- "median"
+  # summary_stats <- summary_stats %>%
+  #   mutate(across(everything(), as.numeric))
+  summary_stats <- summary_stats %>%
+        mutate(across(everything(), ~ { attr(., "label") <- NULL; . }))
   return(summary_stats)
 }
 

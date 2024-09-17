@@ -2,6 +2,8 @@ library(tidyverse)
 library(kableExtra)
 library(gt)
 
+source("./helper.R")  
+
 # Function to create a cross-tabulation and format it for PDF output
 # Caption font size is not set by rmarkdown yaml header fontsize: 12pt
 # TODO: may find more at https://apreshill.github.io/data-vis-labs-2018/05-tables.html#1_goals_for_lab_05
@@ -64,7 +66,7 @@ freq_html_table <- function(data, column_name) {
   
   # Generate the gt table
   gt_table <- combined_df %>%
-    gt() %>%
+    gt::gt() %>%
     tab_header(
       title = paste("Frequency and Percentage of", column_name)
     ) %>%
@@ -89,11 +91,11 @@ freq_html_table <- function(data, column_name) {
 
 
 
-# generate html table based on gt() from tibble, such as from summarize_missingness
+# generate html table based on gt::gt() from tibble, such as from summarize_missingness
 create_basic_html_table <- function(df, title) {
   # Generate the gt table
   gt_table <- df %>%
-    gt() %>%
+    gt::gt() %>%
     tab_header(
       title = title
     )  %>%
@@ -117,7 +119,7 @@ cross_freq_html_table_counts <- function(data, column1, column2) {
   # Add row and column sums (margins)
   margins_table <- addmargins(contingency_table)
   
-  # Convert table to a matrix format for easy use in gt()
+  # Convert table to a matrix format for easy use in gt::gt()
   table_matrix <- as.data.frame.matrix(margins_table)
   
   # Set row names to a separate column to keep them as row labels
@@ -131,7 +133,7 @@ cross_freq_html_table_counts <- function(data, column1, column2) {
   # Generate the gt table
   gt_table <- table_matrix %>%
     # gt() %>%
-    gt(rowname_col = "Row") %>%  # Set rowname_col to preserve the row labels
+    gt::gt(rowname_col = "Row") %>%  # Set rowname_col to preserve the row labels
     tab_header(
       title = paste("Cross-Frequency Table Between", column1, "and", column2)
     ) %>%
@@ -149,6 +151,128 @@ cross_freq_html_table_counts <- function(data, column1, column2) {
   
   return(gt_table)
 }
+
+# TODO: batch rendering problem in Rmarkdown Quarto
+# the outputs generated within that loop are not 
+# automatically displayed in the final document 
+# unless explicitly printed in a way that the document renderer can interpret. 
+# This is especially true for outputs like gt() tables, 
+# which are S3 objects that need to be properly handled to render in the document.
+
+generate_column_report <- function(col_name, df_name) {
+  # Create a temporary file for the child document
+  tmp_file <- tempfile(fileext = ".qmd")
+  
+  # Write the code to the temporary file
+  cat(
+    "---\n",
+    "execute:\n",
+    "  echo: false\n",
+    "---\n\n",
+    "#### Frequency Table for ", col_name, "\n\n",
+    "```{r}\n",
+    df_name, "%>% freq_html_table('", col_name, "')\n",
+    "```\n\n",
+    "#### Descriptive Summary of ", col_name, "\n\n",
+    "```{r}\n",
+    df_name, "%>% summarize_statistics('", col_name, "') %>% \n",
+    "  create_basic_html_table(title = 'Descriptive Summary of ", col_name, "')\n",
+    "```\n",
+    file = tmp_file, sep = ""
+  )
+  
+  # Return the path to the temporary file
+  return(tmp_file)
+}
+
+## generate simple freq html table report
+
+generate_sim_freq_report <- function(col_name, df_name) {
+  # Create a temporary file for the child document
+  tmp_file <- tempfile(fileext = ".qmd")
+  
+  # Write the code to the temporary file
+  cat(
+    "---\n",
+    "execute:\n",
+    "  echo: false\n",
+    "---\n\n",
+    "### Frequency Table for ", col_name, "\n\n",
+    "```{r}\n",
+    df_name, "%>% freq_html_table('", col_name, "')\n",
+    file = tmp_file, sep = ""
+  )
+  
+  # Return the path to the temporary file
+  return(tmp_file)
+}
+
+# Function to create an HTML cross-frequency table with percentages only
+cross_freq_html_table_percentages <- function(data, column1, column2) {
+  
+  # Create a contingency table for the two specified columns
+  contingency_table <- table(data[[column1]], data[[column2]], useNA = "ifany")
+  
+  # Calculate the percentages based on the total counts
+  percentages_table <- prop.table(contingency_table) * 100
+  
+  # Add row and column sums (margins) to percentages
+  margins_table <- addmargins(percentages_table)
+  
+  # Convert table to a matrix format for easy use in gt::gt()
+  table_matrix <- as.data.frame.matrix(margins_table)
+  
+  # Set row names to a separate column to keep them as row labels
+  table_matrix <- cbind(Row = rownames(table_matrix), table_matrix)
+  
+  # Fix missing column names by replacing empty column names with "NA"
+  colnames(table_matrix)[is.na(colnames(table_matrix))] <- "NA"
+  rownames(table_matrix)[is.na(rownames(table_matrix))] <- "NA"
+  
+  # Generate the gt table with percentages only
+  gt_table <- table_matrix %>%
+    gt::gt(rowname_col = "Row") %>%  # Set rowname_col to preserve the row labels
+    tab_header(
+      title = paste("Percentage (%) Cross-Frequency Table Between", column1, "and", column2)
+    ) %>%
+    tab_spanner(
+      label = column2,  # Group the column headers under the second variable
+      columns = everything()
+    ) %>%
+    tab_stubhead(label = column1) %>%  # Add the name of column1 to the row header
+    tab_style(
+      style = list(
+        cell_text(weight = "bold")
+      ),
+      locations = cells_column_labels()
+    ) %>%
+    fmt_number(
+      columns = everything(),  # Format all percentage columns
+      decimals = 2  # Set the number of decimals to display
+    )
+  
+  return(gt_table)
+}
+
+
+# Function to process each column and render HTML tables
+# Ready for purrr, functional programming 
+# process_and_render <- function(df, col_name) {
+#   # Render the frequency HTML table
+#   freq_html <- freq_html_table(df, col_name)
+#   
+#   # Render the summary statistics HTML table
+#   summary_html <- summarize_statistics(df, col_name) %>%
+#     create_basic_html_table(paste("Descriptive Summary for", col_name))
+#   
+#   # Print the tables (so they render in the output)
+#   # # This approach, tables are not rendered correctly in quarto html format
+#   # purrr::walk(col_names, process_and_render, df = inclusive_df)
+#   # print(freq_html)
+#   # print(summary_html)
+#   # Return both tables as a list
+#   return(list(freq_html = freq_html, summary_html = summary_html))
+# }
 
 
 # # 

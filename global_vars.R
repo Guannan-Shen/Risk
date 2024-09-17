@@ -81,3 +81,9 @@ demo_cols <- c("Age", "Race")
 # table(data$`Pre-estimate`, useNA = "ifany")
 # table(old_data$`Experimental condition`, useNA = "ifany")
 
+## TODO: vars for Research Questions
+rs4_vars <- c("Use_of_data", "Speeder", "Attflag1", 
+              "Attflag2", "Attcount1", "Attcount2")
+
+
+

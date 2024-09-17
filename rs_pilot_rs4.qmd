@@ -1,0 +1,250 @@
+---
+title: "RQ4 analysis"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(ggthemes) # for color blind 
+library(naniar)
+library(visdat)
+library(expss)
+library(knitr)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+df <- readRDS("../data/processing/rs_pilot_inclusive_df.rds") 
+
+```
+
+# Data Filtering Process
+
+```{dot}
+digraph consort_diagram {
+
+  # Define graph direction top to bottom 
+  rankdir=TB;
+
+  # Define node attributes
+  node [shape=box, style=filled, fillcolor=white, 
+           fontname=Helvetica, fontsize=13, fontweight=bold];
+
+  # Define the nodes
+  A [label="703 Subjects who opened the survey link"];
+  B [label="694 Subjects who participated in the survey"];
+  C [label="624 Subjects who met the eligibility criteria"];
+  D [label="Exclude 15 subjects with missing Experimental Condition"];
+  E [label="Exclude 8 subjects with wrong pre-estimate missingness"];
+  F [label="Exclude 43 subjects with worst sparsity"];
+  G [label="558 Subjects remaining"];
+
+  # Define the edges
+  A -> B [label="Excluded 9 subjects who did not start the survey at all"]; 
+  B -> C [label="Excluded 70 subjects who did not meet the eligibility criteria"];
+  C -> D;
+  D -> E;
+  E -> F;
+  F -> G;
+}
+```
+
+# Data Quality Assurance 
+
+The filtered dataset used here contains **`r dim(df)[1]` subjects** and `r dim(df)[2]`
+columns. 
+
+## Missingness Check and Descriptive Analysis 
+
+This is to further check missingness and summarize descriptive statistics of specific variables. Histograms were not used because of the outliers. 
+
+### Missingness 
+
+```{r}
+#| label: missing_vars
+
+# # risk comp, categorical
+# risk_comp_cols <- paste0("RiskComp", 1:2)
+# obj_label_cols <- paste0("ObjNum", 1:3)
+
+col_names <- c(risk_rej_cols[4:7], risk_comp_cols, obj_label_cols)
+
+summarize_missingness(df, col_names) %>%
+     create_basic_html_table(title = 
+                       "Check Missingness: Risks Comprehension and Obj Nums")
+
+```
+
+### Descriptive Analysis
+
+```{r}
+#| label: desc_vars1
+#| results: asis
+
+# Loop over each column name
+for (col_name in col_names) {
+  # Generate the child document for the current column
+  child_file <- generate_column_report(col_name, "df")
+  # Include the child document
+  cat(knitr::knit_child(child_file, quiet = TRUE))
+}
+
+```
+
+
+```{r}
+#| label: hist1
+
+df %>% ggplot() + geom_histogram(aes(x = !!sym(obj_label_cols[3])))
+```
+
+
+## Check Related Variables 
+
+
+```{r}
+#| label: related
+#| 
+# related_answers <- c("Q1.2", "Q1a", "Q2.2", "Q2a")
+# bayesian_cols <- sort(c(paste0("Bayesian", 1:3), 
+#                         paste0("Bayesian", 1:3, "a")))
+# corresponding new columns "Bayesian1"  "Bayesian1a" "Bayesian2"  "Bayesian2a"
+df %<>% generate_missingness_flag(bayesian_cols[2])
+df %<>% generate_missingness_flag(bayesian_cols[4])
+
+cross_freq_html_table_counts(df,
+                  bayesian_cols[1], paste0("missingness_", bayesian_cols[2]))
+cross_freq_html_table_counts(df,
+                  bayesian_cols[3], paste0("missingness_", bayesian_cols[4]))
+
+```
+
+
+# Reseach Question 4
+How do different methods for identifying potential inattentive responders perform?
+
+## Indicators Breakdown
+
+- Create Speeder flag (1 = Speeder, 0 = Not Speeder), according to 0.5 * median_duration.  
+- Create Attflag1 (1 = pass, 0 = fail for AttCheck1).  
+- Create Attflag2 (1 = pass, 0 = fail for AttCheck2).  
+- Create Attcount1 (sum of Attflag1 and Attflag2), count of passed attention checks (either 0, 1, or 2).  
+- Create Attcount2 (sum of Attflag1, Attflag2, and Use_of_data), count of passed attention checks and the use of data flag (0 to 3).  
+
+```{r}
+#| label: rs4_prep
+#| 
+att <- c("AttCheck1", "AttCheck2", "Use_of_data")
+cols <- c("Duration (in seconds)")
+df %>% summarize_statistics(cols) %>%  
+                 create_basic_html_table(title = 
+                              paste0("Descriptive Summary of ", cols))
+median_duration <- median(df$`Duration (in seconds)`)
+
+## prepare variables for RS4
+df %<>% mutate(
+    # Create Speeder flag (1 = Speeder, 0 = Not Speeder)
+    Speeder = if_else(`Duration (in seconds)` < 0.5 * median_duration, 1, 0),
+    
+    # Create Attflag1 (1 = pass, 0 = fail for AttCheck1)
+    Attflag1 = if_else(AttCheck1 == 4, 1, 0),
+    
+    # Create Attflag2 (1 = pass, 0 = fail for AttCheck2)
+    Attflag2 = if_else(AttCheck2 == 4, 1, 0),
+    
+    # Create Attcount1 (sum of Attflag1 and Attflag2)
+    Attcount1 = Attflag1 + Attflag2,
+    
+    # Create Attcount2 (sum of Attflag1, Attflag2, and Use_of_data)
+    # Assuming Use_of_data is also a flag where 1 means "pass" and 0 means "fail"
+    Attcount2 = Attflag1 + Attflag2 + Use_of_data
+)
+
+rs4_vars <- c("Use_of_data", "Speeder", "Attflag1", 
+              "Attflag2", "Attcount1", "Attcount2")
+```
+
+## Questions Breakdown
+
+We want to see the frequencies (and %) for each of the 3 criteria:
+1. How many are speeding?   
+2. How many answer each of the directed questions incorrectly? And then a count of how many they answered correct/incorrect (0/1/2).    
+3. How many answer the self-reported “in your honest opinion” that we should not use their data.  
+4. Between speeders, “don’t use my data” (Q8 Use of data), and incorrectly answered 2/2 directed questions. Please provide frequencies and % for all.  
+5. Also compute how many people miss at least 1 of the 3 criteria, and a frequency (and %) of how many people miss 0 vs 1 vs 2 vs 3 criteria
+
+
+```{r}
+#| label: rs4_report1
+#| results: asis
+
+# Loop over each column name
+for (col_name in rs4_vars) {
+  # Generate the child document for the current column
+  child_file <- generate_sim_freq_report(col_name, "df")
+  # Include the child document
+  cat(knitr::knit_child(child_file, quiet = TRUE))
+}
+```
+
+### Cross-frequency Tables Between Speeder and Attention Flags  
+
+```{r}
+#| label: rs4_report2
+
+cross_freq_html_table_counts(df,
+                      rs4_vars[1], rs4_vars[2])
+cross_freq_html_table_counts(df,
+                      rs4_vars[5], rs4_vars[2])
+cross_freq_html_table_counts(df,
+                      rs4_vars[6], rs4_vars[2])
+
+cross_freq_html_table_percentages(df,
+                      rs4_vars[1], rs4_vars[2])
+cross_freq_html_table_percentages(df,
+                      rs4_vars[5], rs4_vars[2])
+cross_freq_html_table_percentages(df,
+                      rs4_vars[6], rs4_vars[2])
+```
+
+
+```{r}
+#| table: test
+
+# ggplot(df, aes(x=ObjNum3)) + geom_histogram()
+```
+

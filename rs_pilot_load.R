@@ -90,6 +90,8 @@ saveRDS(data %>% filter(!(is.na(`Pre-estimate`)
 
 raw_df <- readRDS("../data/processing/rs_pilot_good_preestimate.rds")
 
+# dim(raw_df)
+
 raw_df %<>% mutate(total_missing_prop_obs = 
                      round(rowMeans(is.na(.)), 4))
 
@@ -103,6 +105,16 @@ raw_df %<>% mutate(risks_missing_prop_obs = missing_flag_df$risks_missing_prop_o
 # TODO: important save dataset, raw_df with missingness flag 
 
 saveRDS(raw_df, "../data/processing/rs_pilot_good_esti_missing_flag.rds")
+
+# read the raw_df 
+raw_df <- readRDS("../data/processing/rs_pilot_good_esti_missing_flag.rds")
+
+# only filter out risks 100% missing obs 
+
+inclusive_df <- raw_df %>% filter(risks_missing_prop_obs < 1)
+
+saveRDS(inclusive_df,
+        "../data/processing/rs_pilot_inclusive_df.rds")
 
 # check number of observations with worse missingness
 no_worst_missing_df <- raw_df %>% filter(risks_missing_prop_obs <= 0.25)
