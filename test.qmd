@@ -1,0 +1,28 @@
+---
+title: "test"
+format: html
+---
+
+```{dot}
+digraph consort_diagram {
+
+  # Define graph direction top to bottom 
+  rankdir=TB;
+
+  # Define node attributes
+  node [shape=box, style=filled, fillcolor=white, 
+           fontname=Helvetica, fontsize=13];
+
+  # Define the nodes
+  A [label="703 Subjects who opened the survey link"];
+  B [label="694 Subjects who participated in the survey"];
+  C [label="624 Subjects who met the eligibility criteria"];
+  D [label="527 Subjects who had valid risk estimates and completed risk rejection questions"];
+
+
+  # Define the edges
+  A -> B [label="Excluded 9 subjects who did not start the survey at all", minlen=2]; 
+  B -> C [label="Excluded 70 subjects who did not meet the eligibility criteria" , minlen=2];
+  C -> D [label="Excluded 97 subjects who did not have valid risk estimates and missingness in risk rejection questions", minlen=2];
+}
+```

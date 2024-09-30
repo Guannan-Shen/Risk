@@ -139,7 +139,8 @@ cross_freq_html_table_counts <- function(data, column1, column2) {
     ) %>%
     tab_spanner(
       label = column2,  # Group the column headers under the second variable
-      columns = everything()
+      columns = everything(),
+      id = paste0("spanner_", column2)  # Provide a unique spanner ID
     ) %>%
     tab_stubhead(label = column1) %>%  # Add the name of column1 to the row header
     tab_style(
@@ -237,7 +238,8 @@ cross_freq_html_table_percentages <- function(data, column1, column2) {
     ) %>%
     tab_spanner(
       label = column2,  # Group the column headers under the second variable
-      columns = everything()
+      columns = everything(),
+      id = paste0("spanner_", column2)  # Provide a unique spanner ID
     ) %>%
     tab_stubhead(label = column1) %>%  # Add the name of column1 to the row header
     tab_style(

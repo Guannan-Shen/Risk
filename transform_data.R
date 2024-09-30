@@ -42,11 +42,11 @@ export_character_only <- function(file_path, out_path){
     ,data %>% select(where(is.character))), out_path)
 } 
 
-# TODO: test
-export_no_timer("../data/raw_data/Pilot Risk soft launch data_numeric values.csv",
-                "../data/processing/no_time_pilot_risk_soft.csv")
-
-export_character_only("../data/processing/no_time_pilot_risk_soft.csv",
-                      "../data/processing/text_only_pilot_risk_soft.csv")
+# # TODO: test
+# export_no_timer("../data/raw_data/Pilot Risk soft launch data_numeric values.csv",
+#                 "../data/processing/no_time_pilot_risk_soft.csv")
+# 
+# export_character_only("../data/processing/no_time_pilot_risk_soft.csv",
+#                       "../data/processing/text_only_pilot_risk_soft.csv")
 
 

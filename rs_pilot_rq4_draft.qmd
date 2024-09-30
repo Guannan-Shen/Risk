@@ -48,7 +48,7 @@ source("./missing_helper.R")
 
 source("./global_vars.R")
 
-df <- readRDS("../data/processing/rs_pilot_inclusive_df.rds") 
+df <- readRDS("../data/processing/rs_pilot_rq4_dataset.rds") 
 
 ```
 
@@ -59,27 +59,19 @@ digraph consort_diagram {
 
   # Define graph direction top to bottom 
   rankdir=TB;
-
   # Define node attributes
-  node [shape=box, style=filled, fillcolor=white, 
-           fontname=Helvetica, fontsize=13, fontweight=bold];
+  node [shape=box, style="rounded", color="black", fontname=Helvetica, fontsize=20];
 
   # Define the nodes
-  A [label="703 Subjects who opened the survey link"];
-  B [label="694 Subjects who participated in the survey"];
-  C [label="624 Subjects who met the eligibility criteria"];
-  D [label="Exclude 15 subjects with missing Experimental Condition"];
-  E [label="Exclude 8 subjects with wrong pre-estimate missingness"];
-  F [label="Exclude 43 subjects with worst sparsity"];
-  G [label="558 Subjects remaining"];
+  A [label=<<B>703 </B> Subjects who opened the survey link>];
+  B [label=<<B>694 </B> Subjects who participated in the survey>];
+  C [label=<<B>624 </B> Subjects who met the eligibility criteria>];
+  D [label=<<B>527 </B> Subjects who had valid risk estimates and completed risk rejection questions>];
 
   # Define the edges
-  A -> B [label="Excluded 9 subjects who did not start the survey at all"]; 
-  B -> C [label="Excluded 70 subjects who did not meet the eligibility criteria"];
-  C -> D;
-  D -> E;
-  E -> F;
-  F -> G;
+  A -> B [label=<<FONT POINT-SIZE="20">   Excluded 9 subjects who did not start the survey at all</FONT>>]; 
+  B -> C [label=<<FONT POINT-SIZE="20">   Excluded 70 subjects who did not meet the eligibility criteria</FONT>>];
+  C -> D [label=<<FONT POINT-SIZE="20">   Excluded 97 subjects who did not have valid risk estimates and missingness in risk rejection questions</FONT>>];
 }
 ```
 
@@ -101,7 +93,7 @@ This is to further check missingness and summarize descriptive statistics of spe
 # risk_comp_cols <- paste0("RiskComp", 1:2)
 # obj_label_cols <- paste0("ObjNum", 1:3)
 
-col_names <- c(risk_rej_cols[4:7], risk_comp_cols, obj_label_cols)
+col_names <- c(risk_rej_cols[1:7], risk_comp_cols, obj_label_cols)
 
 summarize_missingness(df, col_names) %>%
      create_basic_html_table(title = 
@@ -175,24 +167,24 @@ df %>% summarize_statistics(cols) %>%
                               paste0("Descriptive Summary of ", cols))
 median_duration <- median(df$`Duration (in seconds)`)
 
-## prepare variables for RS4
-df %<>% mutate(
-    # Create Speeder flag (1 = Speeder, 0 = Not Speeder)
-    Speeder = if_else(`Duration (in seconds)` < 0.5 * median_duration, 1, 0),
-    
-    # Create Attflag1 (1 = pass, 0 = fail for AttCheck1)
-    Attflag1 = if_else(AttCheck1 == 4, 1, 0),
-    
-    # Create Attflag2 (1 = pass, 0 = fail for AttCheck2)
-    Attflag2 = if_else(AttCheck2 == 4, 1, 0),
-    
-    # Create Attcount1 (sum of Attflag1 and Attflag2)
-    Attcount1 = Attflag1 + Attflag2,
-    
-    # Create Attcount2 (sum of Attflag1, Attflag2, and Use_of_data)
-    # Assuming Use_of_data is also a flag where 1 means "pass" and 0 means "fail"
-    Attcount2 = Attflag1 + Attflag2 + Use_of_data
-)
+# ## prepare variables for RS4
+# df %<>% mutate(
+#     # Create Speeder flag (1 = Speeder, 0 = Not Speeder)
+#     Speeder = if_else(`Duration (in seconds)` < 0.5 * median_duration, 1, 0),
+#     
+#     # Create Attflag1 (1 = pass, 0 = fail for AttCheck1)
+#     Attflag1 = if_else(AttCheck1 == 4, 1, 0),
+#     
+#     # Create Attflag2 (1 = pass, 0 = fail for AttCheck2)
+#     Attflag2 = if_else(AttCheck2 == 4, 1, 0),
+#     
+#     # Create Attcount1 (sum of Attflag1 and Attflag2)
+#     Attcount1 = Attflag1 + Attflag2,
+#     
+#     # Create Attcount2 (sum of Attflag1, Attflag2, and Use_of_data)
+#     # Assuming Use_of_data is also a flag where 1 means "pass" and 0 means "fail"
+#     Attcount2 = Attflag1 + Attflag2 + Use_of_data
+# )
 
 rs4_vars <- c("Use_of_data", "Speeder", "Attflag1", 
               "Attflag2", "Attcount1", "Attcount2")
@@ -201,6 +193,7 @@ rs4_vars <- c("Use_of_data", "Speeder", "Attflag1",
 ## Questions Breakdown
 
 We want to see the frequencies (and %) for each of the 3 criteria:
+
 1. How many are speeding?   
 2. How many answer each of the directed questions incorrectly? And then a count of how many they answered correct/incorrect (0/1/2).    
 3. How many answer the self-reported “in your honest opinion” that we should not use their data.  
@@ -245,6 +238,8 @@ cross_freq_html_table_percentages(df,
 ```{r}
 #| table: test
 
+# data %>% summarize_missingness(columns_to_check) %>% 
+#            create_basic_html_table(title = "Missingness")
 # ggplot(df, aes(x=ObjNum3)) + geom_histogram()
 ```
 

@@ -2,6 +2,11 @@
 # screenings
 screening_cols <- c("PriorBreastCancer", "BreastRemoved", "ChestRad",
                     "DCIS-LCIS", "BRCA1/2", "CowdenSyn", "LiFraumeni")
+
+# TODO: Columns must be complete, no missingness at all
+# Specify the columns to filter dataset based on missing values
+columns_to_check <- c("Experimental condition", "abs_risk_rounded", "RReject1", 
+                      paste0("RReject", 3:7))
 # expected to be complete columns, continuous?
 # TODO: check missingness
 risks_cols <- c("Experimental condition", "abs_risk_rounded", 
@@ -21,6 +26,18 @@ risks_cols <- c("Experimental condition", "abs_risk_rounded",
                 "50yr_abs_risk_age_group_no_cancer_cohort")
 # cross tabulation, categorical
 conditions <- c("Experimental condition", "Pre-estimate")
+
+# Risk Calcs vars 
+
+risk_calcs <- c("Age", "Race/Ethnicity", "PlaceofBirth", "Asian/AA",
+                "FirstMenses","FirstChild", "family_history", "Biopsy",
+                "Num_biopsies", "Hyperplasia")
+
+# "abs_risk_age_group_rounded",
+
+# "abs_risk_relative_text", vs RReject3
+
+# RReject1 - "abs_risk_rounded"
 
 # risk rejection related, better be complete, ordinal, RReject1
 risk_rej_cols <- paste0("RReject", 1:7)
