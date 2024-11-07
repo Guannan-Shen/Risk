@@ -1,0 +1,149 @@
+---
+title: "RS Pilot Data Quality"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+
+library(questionr)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+# Data Quality Assurance
+
+## Inclusion: Research Question Related Variables
+
+A list of variables are shown below:
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+# df$`Experimental condition`
+# df$Condition
+# df$`RiskCon Info Seeking`
+
+df_vars <- read.csv("../data/processing/vars_list.csv")
+
+
+```
+
+```{r}
+#| label: var_list
+
+# df_vars$Vars
+print(df_vars$Vars)
+
+```
+
+
+# Check Missingness
+
+## Subject Level
+
+```{r}
+#| label: na1
+
+```
+
+
+## Variable/Item Level
+
+```{r}
+#| label: na2
+
+```
+
+
+```{r}
+#| label: test1
+
+# TODO: get more descriptives, kurtosis, skewness 
+# TODO: https://stackoverflow.com/questions/69754857/how-to-build-differently-a-descriptive-statistics-table-by-using-the-gtsummary-l
+
+# TODO: Strategies for identifying person-level and item-level missingness discussed
+# TODO: 10% level of missingness at person-level as the cutoff 
+
+# df %>% tbl_summary(
+#       include = c(paste0("RReject", 4:7)),
+#       statistic = list(all_categorical() ~ "{n} ({p}%)"),
+#     digits = all_continuous() ~ 2,
+#     missing_text = "(Missing)"
+#   ) %>% add_n()  %>% 
+#   bold_labels()
+
+# add_n()
+
+# Multi-line Continuous Summaries
+# Continuous variables may also be summarized on multiple lines—a common format in some journals. To update the continuous variables to summarize on multiple lines, update the summary type to "continuous2" (for summaries on two or more lines).
+# 
+# trial2 |>
+#   select(age, trt) |>
+#   tbl_summary(
+#     by = trt,
+#     type = all_continuous() ~ "continuous2",
+#     statistic = all_continuous() ~ c(
+#       "{N_nonmiss}",
+#       "{median} ({p25}, {p75})",
+#       "{min}, {max}"
+#     ),
+#     missing = "no"
+#   ) |>
+#   add_p(pvalue_fun = label_style_pvalue(digits = 2))
+
+
+# ,
+#       label = list(
+#                 Income ~ "Personal income (USD)",
+#                 preg_any ~ "Ever Been Pregnant",
+#                 Sex ~ "Sex at birth",
+#                 Age ~ "Age (years)",
+#                 Distance ~ "Distance (miles)",
+#                 survey_complete ~ "Survey completeness")
+
+```
+
+```{r}
+#| label: test2
+
+
+```
+

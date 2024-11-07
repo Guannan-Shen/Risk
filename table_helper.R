@@ -257,6 +257,28 @@ cross_freq_html_table_percentages <- function(data, column1, column2) {
 }
 
 
+generate_desc_summary_report <- function(col_name, df_name) {
+  # Create a temporary file for the child document
+  tmp_file <- tempfile(fileext = ".qmd")
+  
+  # Write the code to the temporary file
+  cat(
+    "---\n",
+    "execute:\n",
+    "  echo: false\n",
+    "---\n\n",
+    "#### Descriptive Summary of ", col_name, "\n\n",
+    "```{r}\n",
+    df_name, "%>% summarize_statistics('", col_name, "') %>% \n",
+    "  create_basic_html_table(title = 'Descriptive Summary of ", col_name, "')\n",
+    "```\n",
+    file = tmp_file, sep = ""
+  )
+  
+  # Return the path to the temporary file
+  return(tmp_file)
+}
+
 # Function to process each column and render HTML tables
 # Ready for purrr, functional programming 
 # process_and_render <- function(df, col_name) {

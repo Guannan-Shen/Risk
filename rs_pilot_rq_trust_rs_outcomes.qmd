@@ -1,0 +1,255 @@
+---
+title: "RS Pilot Trust Measures and Risk Skepticism Outcomes"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+
+library(questionr)
+library(readxl)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+# trust questions/labels
+df_trust <- read_excel("../data/processing/trust_measures.xlsx")
+
+# trust_subscales <- c("GroupMed_Suspicion", "GroupMed_Disparities",
+#                      "HealthSys_Competence", "HealthSys_Values")
+
+# correlations between trust measures and rs outcomes
+# rs_outcomes <- c("Abs_RReject_diff", "RReject_diff", 
+#                 "RReject_mean", "RReject_comp_3")
+
+df <- df %>%
+  mutate(RReject_comp_3_numeric = case_when(
+    RReject_comp_3 == "underestimate" ~ 1,
+    RReject_comp_3 == "accurate estimate" ~ 2,
+    RReject_comp_3 == "overestimate" ~ 3
+  ))
+
+
+```
+
+
+# Correlations Between Trust Subscales and Risk Skepticism Outcomes
+
+
+## Description of Predictors and Outcomes
+
+### Predictors 
+
+The Group-Based Medical Mistrust:
+
+Subscales:
+
+- GroupMedMis1 - GroupMedMis6: Suspicion, **GroupMed_Suspicion**.   
+- GroupMedMis7 - GroupMedMis9: Group disparities in health care, **GroupMed_Disparities**.   
+
+The Health Care System Distrust:   
+
+Subscales:
+
+- HealthSysDis1 - HealthSysDis4: Competence, **HealthSys_Competence**;     
+- HealthSysDis5 - HealthSysDis9: Values, **HealthSys_Values**.  
+
+### Outcomes 
+
+Skepticism on the absolute scale (Absolute numeric risk skepticism):  
+
+- (Absolute value of) Difference between RReject1 and breast cancer risk estimates (abs_risk_rounded)   
+- **RReject_diff**, **Abs_RReject_diff**   
+- Key part of code "RReject_diff = RReject1 - abs_risk_rounded" and "Abs_RReject_diff = abs(RReject_diff)". 
+
+
+Skepticism on the comparative scale (Comparative risk skepticism):  
+
+- Combination of RReject3 and Abs_risk_relative_risk   
+- 3 categories outcome, **RReject_comp_3**, underestimate, accurate estimate, overestimate.  
+
+
+Skepticism on the likert “belief” scale (Disbelief risk skepticism), **RReject_mean**:
+
+- Average of RReject4 - RReject7 (1 - 5, 5 = Disagree a lot.)  
+
+- Key part of code, "RReject_mean = rowMeans(across(all_of(paste0("RReject", 4:7))))"
+
+
+## Correlations Between Trust Subscales and RS Outcomes
+
+To calculate correlations:    
+
+- **RReject_comp_3**, underestimate, accurate estimate, overestimate transformed to **RReject_comp_3_numeric** as 1, 2, 3.  
+
+- Using **Pearson** correlation between Trust subscales and RReject_diff, Abs_RReject_diff, and RReject_mean, Using **Spearman rank** correlation between Trust subscales and RReject_comp_3_numeric.   
+
+
+### All Subjects
+
+```{r}
+#| label: cor1
+
+# cor
+# cor.test
+
+# cor(df$GroupMed_Suspicion, df$RReject_comp_3_numeric, 
+#     use = "pairwise.complete.obs", method = "spearman")
+# 
+# cor(df$GroupMed_Suspicion, df$RReject_diff, 
+#     use = "pairwise.complete.obs", method = "pearson")
+
+
+# Define trust subscales and risk skepticism outcomes
+trust_subscales <- c("GroupMed_Suspicion", "GroupMed_Disparities", 
+                     "HealthSys_Competence", "HealthSys_Values")
+rs_outcomes <- c("Abs_RReject_diff", "RReject_diff", 
+                 "RReject_mean", "RReject_comp_3_numeric")
+
+# Function to calculate correlation
+calculate_correlation <- function(x, y, method) {
+  cor(x, y, use = "pairwise.complete.obs", method = method)
+}
+
+# Create an empty matrix to store the results
+correlation_matrix <- matrix(NA, nrow = length(rs_outcomes), 
+                             ncol = length(trust_subscales),
+                             dimnames = list(rs_outcomes, trust_subscales))
+
+# Calculate Pearson correlations for the first three outcomes
+for (outcome in rs_outcomes[1:3]) {
+  for (subscale in trust_subscales) {
+    correlation_matrix[outcome, subscale] <- calculate_correlation(
+      df[[outcome]], df[[subscale]], method = "pearson"
+    )
+  }
+}
+
+# Calculate Spearman correlation for RReject_comp_3_numeric
+for (subscale in trust_subscales) {
+  correlation_matrix["RReject_comp_3_numeric", 
+                     subscale] <- calculate_correlation(
+    df[["RReject_comp_3_numeric"]], df[[subscale]], method = "spearman"
+  )
+}
+
+# Convert the matrix to a data frame and round the values
+correlation_df <- as.data.frame(correlation_matrix) %>%
+  mutate_all(~ round(., 4))
+
+# Display the correlation table
+correlation_df %>%
+  kable(caption = 
+          "Correlation Table: Trust Subscales and Risk Skepticism Outcomes")
+
+```
+### Race Subgroups
+
+```{r}
+#| label: cor2
+
+# Function to calculate correlations and store in a data frame
+calculate_correlations_by_race <- function(race_group) {
+  # Filter the data for the current race group
+  race_data <- df %>% filter(Race_Ethnicity == race_group)
+  
+  # Create an empty matrix to store the results
+  correlation_matrix <- matrix(NA, nrow = length(rs_outcomes), 
+                               ncol = length(trust_subscales),
+                               dimnames = list(rs_outcomes, trust_subscales))
+  
+  # Calculate Pearson correlations for the first three outcomes
+  for (outcome in rs_outcomes[1:3]) {
+    for (subscale in trust_subscales) {
+      correlation_matrix[outcome, subscale] <- cor(
+        race_data[[outcome]], race_data[[subscale]], 
+        use = "pairwise.complete.obs", method = "pearson"
+      )
+    }
+  }
+  
+  # Calculate Spearman correlation for RReject_comp_3_numeric
+  for (subscale in trust_subscales) {
+    correlation_matrix["RReject_comp_3_numeric", subscale] <- cor(
+      race_data[["RReject_comp_3_numeric"]], race_data[[subscale]], 
+      use = "pairwise.complete.obs", method = "spearman"
+    )
+  }
+  
+  # Convert the matrix to a data frame and round the values
+  correlation_df <- as.data.frame(correlation_matrix) %>%
+    mutate_all(~ round(., 4))
+  
+  # Return the correlation table
+  correlation_df
+}
+
+# Calculate correlations for each race group
+correlations_white <- calculate_correlations_by_race("White")
+correlations_black <- calculate_correlations_by_race("African or African American / Black")
+
+# Display the correlation tables
+correlations_white %>%
+  kable(caption = "Correlation Table for White Subjects: Trust Subscales and Risk Skepticism Outcomes")
+
+correlations_black %>%
+  kable(caption = "Correlation Table for African or African American Subjects: Trust Subscales and Risk Skepticism Outcomes")
+
+```
+
+
+
+```{r}
+#| label: test1
+
+
+```
+
+
+```{r}
+#| label: test2
+
+```
+
+
+

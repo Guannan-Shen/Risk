@@ -47,7 +47,7 @@ summarize_statistics = function(data, columns_to_summarize, rename_by_label = FA
   }
   
   # Select the specified columns first
-  data_selected = data %>% select(all_of(columns_to_summarize))
+  data_selected = data %>% dplyr::select(all_of(columns_to_summarize))
   
   # Optionally rename columns by variable labels before summary
   if (rename_by_label && !is.null(labels)) {

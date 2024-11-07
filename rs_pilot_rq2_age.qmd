@@ -1,0 +1,280 @@
+---
+title: "Pilot RQ2 analysis"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+library(stargazer)
+library(truncreg)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# TODO: may change dataset
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+```
+
+# Explore Age Groups
+
+```{r}
+#| label: explore_age
+
+df %>% tbl_summary(
+      include = c(Age_group_3, Age_group_2),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)",
+    label = list(
+                Age_group_3 ~ "Age_group_3: three groups",
+                Age_group_2 ~ "Age_group_2: two groups")
+    ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_header(label ~ "**Characteristics**")
+
+
+p1 <- create_histogram(df, "Age", seq(30, 80, 5) , 
+                 "Histogram of Age")
+
+print(p1)
+
+summarize_statistics(df, "Age") %>%
+   create_basic_html_table(title = 
+                  "Descriptive Summary of Age")
+
+```
+# Tests of Risk Skepticism and Three Age groups 
+
+3 age groups 40-49; 50-59; 60-74
+
+## Simple linear model
+
+### Results Summary
+
+```{r}
+#| label: meansd1
+
+df %>%
+  group_by(Age_group_3) %>%
+  summarise(
+    mean_RReject_diff = mean(RReject_diff, na.rm = TRUE),
+    sd_RReject_diff = sd(RReject_diff, na.rm = TRUE),
+    mean_Abs_RReject_diff = mean(Abs_RReject_diff, na.rm = TRUE),
+    sd_Abs_RReject_diff = sd(Abs_RReject_diff, na.rm = TRUE),
+    mean_RReject_mean = mean(RReject_mean, na.rm = TRUE),
+    sd_RReject_mean = sd(RReject_mean, na.rm = TRUE)
+  ) %>% kable()
+
+```
+
+
+```{r}
+#| label: testlm1
+
+# Fit linear models for each outcome
+model_RR_diff <- lm(RReject_diff ~ Age_group_3, data = df)
+model_RR_diff_abs <- lm(Abs_RReject_diff ~ Age_group_3, data = df)
+model_RReject_mean <- lm(RReject_mean ~ Age_group_3, data = df)
+
+# Summarize the three models
+stargazer(model_RR_diff, model_RR_diff_abs, model_RReject_mean,
+          type = "text",
+          title = "Linear Regression Results for RReject_diff, Abs_RReject_diff, and RRejects Average by three age groups",
+          align = TRUE,
+          single.row = TRUE)
+
+```
+
+### Diagnostics
+
+
+```{r}
+#| label: regression1
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(model_RR_diff)
+plot(model_RR_diff_abs)
+plot(model_RReject_mean)
+
+```
+
+
+## Chi-squared test of Comparative Risk Skepticism and Age Group
+
+```{r}
+#| label: testCompara1
+
+# too many cells with small counts
+tbl_cross(
+  data = df,
+  row = RReject_comp_1,       
+  col = Age_group_3,        
+  percent = "cell"       # Display counts and percentages
+)  %>% bold_labels() # Add p-value from chi-squared test, test = "chisq.test"
+
+
+fisher.test(table(df$RReject_comp_1, df$Age_group_3), simulate.p.value=TRUE)
+
+# Print the table with counts, percentages, and chi-squared test p-value
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_2,       
+  col = Age_group_3,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_3,       
+  col = Age_group_3,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+```
+
+
+# Tests of Risk Skepticism and Two Age groups 
+
+2 age groups 40-64 and 65-74.
+
+## Simple linear model
+
+### Results Summary
+
+
+```{r}
+#| label: meansd2
+
+df %>%
+  group_by(Age_group_2) %>%
+  summarise(
+    mean_RReject_diff = mean(RReject_diff, na.rm = TRUE),
+    sd_RReject_diff = sd(RReject_diff, na.rm = TRUE),
+    mean_Abs_RReject_diff = mean(Abs_RReject_diff, na.rm = TRUE),
+    sd_Abs_RReject_diff = sd(Abs_RReject_diff, na.rm = TRUE),
+    mean_RReject_mean = mean(RReject_mean, na.rm = TRUE),
+    sd_RReject_mean = sd(RReject_mean, na.rm = TRUE)
+  ) %>% kable()
+
+```
+
+
+
+```{r}
+#| label: testlm2
+
+model_RR_diff <- lm(RReject_diff ~ Age_group_2, data = df)
+model_RR_diff_abs <- lm(Abs_RReject_diff ~ Age_group_2, data = df)
+model_RReject_mean <- lm(RReject_mean ~ Age_group_2, data = df)
+
+# Summarize the three models
+stargazer(model_RR_diff, model_RR_diff_abs, model_RReject_mean,
+          type = "text",
+          title = "Linear Regression Results for RReject_diff, Abs_RReject_diff, and RRejects Average by two age groups",
+          align = TRUE,
+          single.row = TRUE)
+
+
+```
+
+### Diagnostics
+
+```{r}
+#| label: regression2
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(model_RR_diff)
+plot(model_RR_diff_abs)
+plot(model_RReject_mean)
+
+```
+
+
+## Chi-squared test of Comparative Risk Skepticism and Age Group
+
+```{r}
+#| label: testCompara2
+
+# too many cells with small counts
+tbl_cross(
+  data = df,
+  row = RReject_comp_1,       
+  col = Age_group_2,        
+  percent = "cell"       # Display counts and percentages
+)  %>% bold_labels() # Add p-value from chi-squared test, test = "chisq.test"
+
+
+fisher.test(table(df$RReject_comp_1, df$Age_group_2), simulate.p.value=TRUE)
+
+# Print the table with counts, percentages, and chi-squared test p-value
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_2,       
+  col = Age_group_2,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_3,       
+  col = Age_group_2,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+```
+
+
+
+```{r}
+#| label: test2
+
+```

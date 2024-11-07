@@ -1,0 +1,457 @@
+---
+title: "RS Pilot Trust Measures"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+
+library(questionr)
+library(readxl)
+library(ltm) # cronbach.alpha
+library(lavaan) # confirmatory factor analysis
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+df_trust <- read_excel("../data/processing/trust_measures.xlsx")
+
+trust_subscales <- c("GroupMed_Suspicion", "GroupMed_Disparities",
+                     "HealthSys_Competence", "HealthSys_Values")
+
+```
+
+# Trust Measures
+
+The Group-Based Medical Mistrust Scale:
+
+(1) suspicion, 
+
+(2) group disparities in health care
+
+The Health Care System Distrust:
+
+(1) values subscale,
+
+(2) competence subscale 
+
+
+```{r}
+#| label: trust_measures_basic
+
+df_trust %>% dplyr::select(Var, Label, Subscale) %>% kable()
+
+```
+
+
+## Check Subscales and Reverse Coding.
+
+For both trust (mistrust/distrust) measures, the response key was a Likert-type scale ranging from 1 (Disagree a lot) to 5 (Agree a lot).
+
+The Group-Based Medical Mistrust:
+
+Subscales:
+
+- GroupMedMis1 - GroupMedMis6: Suspicion  
+- GroupMedMis7 - GroupMedMis9: Group disparities in health care (Disparities)
+
+The Health Care System Distrust:
+
+- The raw data does **not** reverse coded correctly. (HealthSysDis1, HealthSysDis2, HealthSysDis4, HealthSysDis7)
+
+
+Subscales:
+
+- HealthSysDis1 - HealthSysDis4: Competence;  
+- HealthSysDis5 - HealthSysDis9: Values.
+
+
+
+```{r}
+#| label: demo
+
+# which(colnames(df) == 'Race/Ethnicity')
+# col number 29
+
+# which(colnames(df) == 'Race')
+# col number 417
+
+# GroupMedMis, categorical
+# grp_medmis_cols <- paste0("GroupMedMis", 1:9)
+
+# health sys dis, categorical
+# health_sysdis_cols <- paste0("HealthSysDis", 1:9)
+
+# # Risk Calcs vars 
+
+# risk_calcs <- c("Age", "Race/Ethnicity", "PlaceofBirth", "Asian/AA",
+#                 "FirstMenses","FirstChild", "family_history", "Biopsy",
+#                 "Num_biopsies", "Hyperplasia")
+
+# df$Race_6_TEXT[!is.na(df$Race_6_TEXT)]
+# table(df$`Race/Ethnicity`)
+# sum(table(df$`Race/Ethnicity`))
+# table(df$Race)
+# sum(table(df$Race))
+
+
+df %>%
+  dplyr::select(all_of(c("Race_Ethnicity", 
+                    grp_medmis_cols, health_sysdis_cols,
+                    trust_subscales))) %>%
+   tbl_summary(by = Race_Ethnicity,
+               statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 3,
+    missing_text = "(Missing)",
+  type = list(
+    all_of(grp_medmis_cols) ~ "continuous",
+    all_of(health_sysdis_cols) ~ "continuous"
+  )
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_caption("**Table 1. Trust Measures by Race**") %>%
+  add_p(test = list(all_continuous() ~ "oneway.test", 
+                    all_categorical() ~ "fisher.test")) %>% 
+  add_overall() %>%
+  modify_spanning_header(all_stat_cols() ~ 
+                           "**RReject_diff groups**") %>%
+  modify_header(label ~ "**Trust Items**")
+```
+# Explore Correlations
+
+## Pairwise Pearson Correlations Among Subscales
+
+```{r}
+#| label: cor_subscales
+# Calculate the Pearson correlation matrix
+cor_matrix <- df %>%
+  dplyr::select(all_of(trust_subscales)) %>%
+  cor(use = "pairwise.complete.obs", method = "pearson") 
+
+# Display the correlation matrix
+cor_matrix %>% round(4) %>% kable(caption = "Whole Dataset")
+
+
+# Calculate Pearson correlations within each level of Race_Ethnicity
+cor_by_race <- df %>%
+  filter(Race_Ethnicity %in% c("White", 
+                  "African or African American / Black")) %>%
+  group_by(Race_Ethnicity) %>%
+  summarize(correlation_matrix = list(round(cor(dplyr::select(cur_data(), 
+                                all_of(trust_subscales)), 
+                        use = "pairwise.complete.obs", 
+                        method = "pearson"), 4)), .groups = "drop")
+
+# Display the correlation matrices for each Race_Ethnicity level
+
+cor_by_race$correlation_matrix[1]  %>% 
+     kable(caption = "White Subjects")
+
+cor_by_race$correlation_matrix[2]  %>% 
+     kable(caption = "African American")
+
+```
+
+
+## Cronbach’s Alpha Measurements Within Subscales
+
+
+```{r}
+#| label: cron
+
+
+# Define a list of column ranges for each subscale
+subscale_ranges <- list(
+  GroupMed_Suspicion = df %>% 
+    dplyr::select(all_of(grp_medmis_cols[1:6])),
+  GroupMed_Disparities = df %>% 
+    dplyr::select(all_of(grp_medmis_cols[7:9])),
+  HealthSys_Competence = df %>% 
+    dplyr::select(all_of(health_sysdis_cols[1:4])),
+  HealthSys_Values = df %>% 
+    dplyr::select(all_of(health_sysdis_cols[5:9]))
+)
+
+# Calculate Cronbach’s Alpha for each subscale and extract key results
+cronbach_results <- lapply(names(subscale_ranges),
+                           function(scale_name) {
+  # Run cronbach.alpha on each subscale data
+  alpha_result <- cronbach.alpha(subscale_ranges[[scale_name]], 
+              standardized = TRUE, CI = TRUE, na.rm = TRUE)
+  
+  # Extract the key results
+  tibble(
+    Subscale = scale_name,
+    Alpha = round(alpha_result$alpha, 4),
+    CI_Lower = round(alpha_result$ci[1], 4),
+    CI_Upper = round(alpha_result$ci[2], 4),
+    Items = alpha_result$p
+  )
+})
+
+# Combine results into a single summary table
+summary_results <- bind_rows(cronbach_results)
+
+# Display the results
+kable(summary_results)
+
+```
+
+## Confirmatory Factor Analysis
+
+RMSEA < 0.05 often used as a cutoff for a reasonably fitting model, athough others suggest 0.1.
+
+The conventional (rule of thumb) threshold for a good fitting model is for CFI to be > 0.9.
+
+When reporting absolute model fit, RMSEA and CFI are the most widely reported, and are probably sufficient.
+
+When comparing non-nested models you should also report differences in BIC and AIC.
+
+### CFA Models Overall and Evaluation
+
+```{r}
+#| label: cfa
+
+# Model 1: Group-Based Medical Mistrust Scale with two factors
+group_med_mistrust_model <- '
+  # Define factors
+  Suspicion =~ GroupMedMis1 + GroupMedMis2 + GroupMedMis3 + GroupMedMis4 + GroupMedMis5 + GroupMedMis6
+  Disparities =~ GroupMedMis7 + GroupMedMis8 + GroupMedMis9
+'
+
+# Model 2: Health System Distrust Scale with two factors
+health_sys_distrust_model <- '
+  # Define factors
+  Competence =~ HealthSysDis1 + HealthSysDis2 + HealthSysDis3 + HealthSysDis4
+  Values =~ HealthSysDis5 + HealthSysDis6 + HealthSysDis7 + HealthSysDis8 + HealthSysDis9
+'
+
+# Fit the models
+fit_group_med_mistrust <- cfa(group_med_mistrust_model, 
+                              data = df)
+
+fit_health_sys_distrust <- cfa(health_sys_distrust_model, 
+                               data = df)
+
+print("Group-Based Medical Mistrust Scale")
+# summary(fit_group_med_mistrust, fit.measures = TRUE)
+fitmeasures(fit_group_med_mistrust, 
+            c('cfi', 'rmsea', 'rmsea.ci.upper', 'bic'))
+
+print("Health System Distrust Scale")
+# summary(fit_health_sys_distrust, fit.measures = TRUE)
+fitmeasures(fit_health_sys_distrust, 
+            c('cfi', 'rmsea', 'rmsea.ci.upper', 'bic'))
+```
+### CFA Models Factor Loadings
+
+```{r}
+#| label: cfa2
+
+result_grp <- inspect(fit_group_med_mistrust, 
+            what = "std")[["lambda"]] %>% as.data.frame()
+
+result_grp$label <- df_trust$Label[10:18]
+
+result_grp %>% kable()
+
+
+result_health <- inspect(fit_health_sys_distrust, 
+        what = "std")[["lambda"]] %>% as.data.frame()
+
+result_health$label <- df_trust$Label[1:9]
+
+result_health %>% kable()
+
+```
+
+
+### CFA Models By Race 
+
+```{r}
+#| label: cfa_race
+
+# List to store CFA results by race for each model
+cfa_results_by_race <- list()
+# Loop through each race group and fit both CFA models
+for(race in c("White", 
+        "African or African American / Black")) {
+  
+  # Filter data for the current race group
+  race_data <- df %>% filter(Race_Ethnicity == race)
+  
+  # Fit the Group-Based Medical Mistrust Model
+  fit_group_med_mistrust <- cfa(group_med_mistrust_model, 
+                data = race_data)
+  loadings_group_med_mistrust <- inspect(fit_group_med_mistrust, 
+                what = "std")[["lambda"]] %>% as.data.frame()
+  
+  loadings_group_med_mistrust$label <- df_trust$Label[10:18]
+  
+  # Fit the Health System Distrust Model
+  fit_health_sys_distrust <- cfa(health_sys_distrust_model, 
+                    data = race_data)
+  loadings_health_sys_distrust <- inspect(fit_health_sys_distrust, 
+                what = "std")[["lambda"]] %>% as.data.frame()
+  
+  loadings_health_sys_distrust$label <- df_trust$Label[1:9]
+  
+  # Save results for each model in a named list
+  cfa_results_by_race[[race]] <- list(
+    GroupMed_Mistrust_Loadings = loadings_group_med_mistrust,
+    HealthSys_Distrust_Loadings = loadings_health_sys_distrust
+  )
+}
+
+# Display Group-Based Medical Mistrust Loadings for White Subjects
+cfa_results_by_race$White$GroupMed_Mistrust_Loadings %>%
+  kable(caption = "Group-Based Medical Mistrust Loadings for White Subjects")
+
+# Display Health System Distrust Loadings for White Subjects
+cfa_results_by_race$White$HealthSys_Distrust_Loadings %>%
+  kable(caption = "Health System Distrust Loadings for White Subjects")
+
+# Display Group-Based Medical Mistrust Loadings for African or African American / Black Subjects
+cfa_results_by_race$`African or African American / Black`$GroupMed_Mistrust_Loadings %>%
+  kable(caption = "Group-Based Medical Mistrust Loadings for African or African American / Black Subjects")
+
+# Display Health System Distrust Loadings for African or African American / Black Subjects
+cfa_results_by_race$`African or African American / Black`$HealthSys_Distrust_Loadings %>%
+  kable(caption = "Health System Distrust Loadings for African or African American / Black Subjects")
+
+```
+## Health System Distrust Q7
+
+Patients get the same medical treatment from the Health Care System, no matter the patient’s race or ethnicity. (Reverse)
+
+
+```{r}
+#| label: healthq7
+# Assuming `GroupMed_Suspicion` and `GroupMed_Disparities` are already created
+# Calculate pairwise correlations between HealthSysDis7 and GroupMedMis1 to GroupMedMis9
+pairwise_correlations <- sapply(df %>% dplyr::select(all_of(grp_medmis_cols)), function(var) {
+  cor(df$HealthSysDis7, var, use = "pairwise.complete.obs", method = "pearson")
+})
+
+# Convert to a data frame for readability
+pairwise_cor_df <- data.frame(
+  Variable = names(pairwise_correlations),
+  Correlation_with_HealthSysDis7 = pairwise_correlations
+)
+
+# Calculate correlation between HealthSysDis7 and GroupMed_Suspicion
+suspicion_correlation <- cor(df$HealthSysDis7, df$GroupMed_Suspicion, use = "pairwise.complete.obs", method = "pearson")
+
+# Calculate correlation between HealthSysDis7 and GroupMed_Disparities
+disparities_correlation <- cor(df$HealthSysDis7, df$GroupMed_Disparities, use = "pairwise.complete.obs", method = "pearson")
+
+# Add the subscale correlations to the data frame
+pairwise_cor_df <- pairwise_cor_df %>%
+  bind_rows(
+    data.frame(
+      Variable = c("GroupMed_Suspicion", "GroupMed_Disparities"),
+      Correlation_with_HealthSysDis7 = c(suspicion_correlation, disparities_correlation)
+    )
+  )
+rownames(pairwise_cor_df ) <- NULL
+# Display the results
+pairwise_cor_df %>%
+  knitr::kable(caption = "Pairwise Correlations between HealthSysDis7 and Group-Based Medical Mistrust Items")
+
+
+alpha_result <- cronbach.alpha(df %>% 
+            dplyr::select(all_of(c("HealthSysDis7", 
+                                   grp_medmis_cols[7:9]))), 
+        standardized = TRUE, CI = TRUE, na.rm = TRUE)
+  
+  # Extract the key results
+alpha_result_sum <-  tibble(
+    Alpha = round(alpha_result$alpha, 4),
+    CI_Lower = round(alpha_result$ci[1], 4),
+    CI_Upper = round(alpha_result$ci[2], 4),
+    Items = alpha_result$p
+  )
+
+alpha_result_sum %>% kable(caption = 
+            "cronbach.alpha of HealthSysDis7 and Disparities")
+
+
+alpha_result <- cronbach.alpha(df %>% 
+            dplyr::select(all_of(c("HealthSysDis7", 
+                                   grp_medmis_cols[1:6]))), 
+        standardized = TRUE, CI = TRUE, na.rm = TRUE)
+  
+  # Extract the key results
+alpha_result_sum <-  tibble(
+    Alpha = round(alpha_result$alpha, 4),
+    CI_Lower = round(alpha_result$ci[1], 4),
+    CI_Upper = round(alpha_result$ci[2], 4),
+    Items = alpha_result$p
+  )
+
+alpha_result_sum %>% kable(caption = 
+            "cronbach.alpha of HealthSysDis7 and Suspicion")
+
+# Display the results
+kable(summary_results)
+
+```
+
+
+```{r}
+#| label: test1
+
+
+```
+
+
+```{r}
+#| label: test2
+
+```
+
+
+
+

@@ -1,0 +1,345 @@
+---
+title: "RQ4 analysis"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+df <- readRDS("../data/processing/rs_pilot_rq4_dataset.rds") 
+
+df_full <- readRDS("../data/processing/rs_pilot_rq4_nomissing_dataset.rds") 
+
+# TODO:  Erika need more Crosstab 
+
+```
+
+
+# RQ4: inattentive responders
+
+**How do different methods for identifying potential inattentive responders perform?**
+
+
+## Indicators Breakdown
+
+- Create Speeder flag (1 = non-speeder, 0 = speeder), according to 0.5 * median_duration.  (**FIX, 1 = pass, 0 = fail**)
+
+- Create Attflag1 (1 = pass, 0 = fail for AttCheck1).  
+
+- Create Attflag2 (1 = pass, 0 = fail for AttCheck2). 
+
+- Create Attcount1 (sum of Attflag1 and Attflag2), count of passed attention checks (either 0, 1, or 2).  
+
+- Create Attcount2 (sum of Attflag1, Attflag2, and Use_of_data), count of passed attention checks and the use of data flag (0 to 3).
+
+- Create Attcount3, the sum (0-4) of people who pass the Speeder, Attflag1, Attflag2, and Use_of_data variables, where “pass” for Speeder is non-speeders. 
+
+- Create Attcount4, (0-3) Sum of passed data use questions, speed, and **passed at least one of the two attention checks**. 
+
+
+
+```{r}
+#| label: rs4_prep
+#| 
+att <- c("Speeder", "Attflag1", "Attflag2", "Use_of_data")
+att_count <- paste0("Attcount", 1:4)
+cols <- c("Duration (in seconds)")
+
+```
+
+## Questions Breakdown
+
+We want to see the frequencies (and %) for each of the 3 criteria:
+
+1. How many are speeding?   
+2. How many answer each of the directed questions incorrectly? And then a count of how many they answered correct/incorrect (0/1/2).    
+3. How many answer the self-reported “in your honest opinion” that we should not use their data.  
+4. Between speeders, “don’t use my data” (Q8 Use of data), and incorrectly answered 2/2 directed questions. Please provide frequencies and % for all.  
+5. Also compute how many people miss at least 1 of the 3 criteria, and a frequency (and %) of how many people miss 0 vs 1 vs 2 vs 3 criteria
+
+6. Is use of data related to the number of attention checks missed? (cross-tabs of attcount1 and use-of-data )
+
+7. Correlations among speeding, use of data and the number of attention checks missed (Three-way cross tables Speeder VS. Attcount1 by Use_of_data).
+
+# Frequency Tables
+
+## Single frequency tables with Missing as Fails
+
+```{r}
+#| label: rq4_single_table2
+df_full %>% tbl_summary(
+      include = c(att, att_count),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)",
+      label = list(
+                Attflag1 ~ "Attflag1: Attention Check Q1",
+                Attflag2 ~ "Attflag2: Attention Check Q2",
+                Attcount1 ~ "Attcount1: Attflag1 + Attflag2",
+    Attcount2 ~ "Attcount2: Attflag1 + Attflag2 + Use_of_data",
+    Attcount4 ~ "Attcount4: Pass_atleast1_check + Speeder + Use_of_data",
+    Attcount3 ~ "Attcount3: Attflag1 + Attflag2 + Use_of_data + Speeder")
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_header(label ~ "**Characteristics**")
+
+```
+
+
+
+## Cross frequency tables with Missings as Fails
+
+```{r}
+#| label: crosstable2a
+
+####### No Missing #############
+tbl_cross(
+  data = df_full,
+  row = Speeder,       
+  col = Use_of_data,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() 
+
+tbl_cross(
+  data = df_full,
+  row = Speeder,       
+  col = Attcount1,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount1: Attflag1 + Attflag2**")
+
+tbl_cross(
+  data = df_full,
+  row = Speeder,       
+  col = Attcount2,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount2: Attflag1 + Attflag2 + Use_of_data**")
+
+tbl_cross(
+  data = df_full,
+  row = Speeder,       
+  col = Attcount3,   
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount3: Attflag1 + Attflag2 + Use_of_data + Speeder**")
+
+tbl_cross(
+  data = df_full,
+  row = Speeder,       
+  col = Attcount4,   
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount4: Pass_atleast1_check + Speeder + Use_of_data**")
+
+tbl_cross(
+  data = df_full,
+  row = Use_of_data,       
+  col = Attcount1,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount1: Attflag1 + Attflag2**")
+```
+
+## Three-way cross tables Speeder VS. Attcount1 by Use_of_data
+
+```{r}
+#| label: crosstable2b
+
+df_full %>%
+  select(Use_of_data, Attcount1, Speeder) %>%
+  tbl_strata(
+    strata = Use_of_data,
+    .tbl_fun =
+      ~ .x %>%
+      tbl_cross(row = Speeder,       
+  col = Attcount1,  
+  missing_text = "Missing",
+  percent = "cell") %>%
+  add_p() %>% bold_labels()  %>% 
+  modify_spanning_header(all_stat_cols() ~ "Attcount1: Attflag1 + Attflag2")
+  )
+
+```
+
+## Dataset with missing values (for reference)
+
+### Single tables with Missing
+
+```{r}
+#| label: rq4_single_table1
+
+# att <- c("Speeder", "Attflag1", "Attflag2", "Use_of_data")
+# att_count <- paste0("Attcount", 1:3)
+
+df %>% tbl_summary(
+      include = c(att, att_count),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)",
+      label = list(
+                Attflag1 ~ "Attflag1: Attention Check Q1",
+                Attflag2 ~ "Attflag2: Attention Check Q2",
+                Attcount1 ~ "Attcount1: Attflag1 + Attflag2",
+    Attcount2 ~ "Attcount2: Attflag1 + Attflag2 + Use_of_data",
+    Attcount4 ~ "Attcount4: Pass_atleast1_check + Speeder + Use_of_data",
+    Attcount3 ~ "Attcount3: Attflag1 + Attflag2 + Use_of_data + Speeder")
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_header(label ~ "**Characteristics**")
+```
+
+
+
+### Cross tables with Missings
+
+```{r}
+#| label: crosstable1a
+
+# rs4_vars <- c("Use_of_data", "Speeder", "Attflag1", 
+#              "Attflag2", "Attcount1", "Attcount2", "Attcount3")
+
+####### Has Missing #############
+tbl_cross(
+  data = df,
+  row = Speeder,       
+  col = Use_of_data,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() 
+
+tbl_cross(
+  data = df,
+  row = Speeder,       
+  col = Attcount1,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount1: Attflag1 + Attflag2**")
+
+tbl_cross(
+  data = df,
+  row = Speeder,       
+  col = Attcount2,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount2: Attflag1 + Attflag2 + Use_of_data**")
+
+tbl_cross(
+  data = df,
+  row = Speeder,       
+  col = Attcount3,   
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount3: Attflag1 + Attflag2 + Use_of_data + Speeder**")
+
+tbl_cross(
+  data = df,
+  row = Speeder,       
+  col = Attcount4,   
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount4: Pass_atleast1_check + Speeder + Use_of_data**")
+
+tbl_cross(
+  data = df,
+  row = Use_of_data,       
+  col = Attcount1,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Attcount1: Attflag1 + Attflag2**")
+```
+
+
+
+### Three-way cross tables Speeder VS. Attcount1 by Use_of_data (with missing)
+
+```{r}
+#| label: crosstable1b
+
+df %>%
+  select(Use_of_data, Attcount1, Speeder) %>%
+  tbl_strata(
+    strata = Use_of_data,
+    .tbl_fun =
+      ~ .x %>%
+      tbl_cross(row = Speeder,       
+  col = Attcount1,  
+  missing_text = "Missing",
+  percent = "cell") %>%
+  add_p() %>% bold_labels()  %>% 
+  modify_spanning_header(all_stat_cols() ~ "Attcount1: Attflag1 + Attflag2")
+  )
+
+```
+
+
+
+
+```{r}
+#| label: test1
+
+```
+

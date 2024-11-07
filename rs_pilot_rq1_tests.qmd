@@ -1,0 +1,396 @@
+---
+title: "rs_pilot_rq1_tests"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+library(stargazer)
+library(truncreg)
+library(questionr)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# TODO: 
+# TODO: may change dataset
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+```
+
+
+
+# Research Question 1
+**The question: Does asking about people’s perceived risk of developing breast cancer prior to providing their risk estimate affect the likelihood of them expressing risk skepticism?**
+
+Conduct an experiment with 3 conditions, randomly assigned in a 1:1:1 allocation: 
+
+(a) Risk perceptions measured before participants viewed the Gail model risk questions vs. 
+
+(b) Risk perceptions measured after participants viewed the Gail model risk questions but before they viewed the results vs. 
+
+(c) Risk perceptions measured after participants viewed their risk results. 
+
+Where **c** is the control group, and group **a, b, c** correspond to 1, 2, 3 in the Experimental condition variable.
+
+## Demographics
+
+```{r}
+#| label: demo
+
+# move to 
+# df %<>%  mutate(
+#     # Convert Experimental condition to factor with labels
+#     Condition = factor(`Experimental condition`, 
+#                        levels = c(1, 2, 3), 
+#       labels = c("Condition a", "Condition b", "Control")),
+#     # Ensure Age is numeric
+#     Age = as.numeric(Age)
+#   )
+
+df %>%
+  dplyr::select(RReject_diff_binary, all_of(risk_calcs)) %>%
+   tbl_summary(by = RReject_diff_binary,
+               statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_caption("**Table 1. Subjects Characteristics**") %>%
+  add_p(test = list(all_continuous() ~ "oneway.test", 
+                    all_categorical() ~ "fisher.test",
+                    Biopsy ~ "fisher.test",
+                    Hyperplasia ~ "fisher.test",
+                    PlaceofBirth ~ "fisher.test",
+                    `Asian/AA` ~ "fisher.test")) %>% 
+  add_overall() %>%
+  modify_spanning_header(c("stat_1", "stat_2") ~ 
+                           "**RReject_diff groups**") %>%
+  modify_header(label ~ "**Characteristics**")
+
+# Experimental Condition` != 3
+```
+
+
+## Questions Breakdown
+
+Does experimental condition predict 
+a) numeric absolute risk skepticism;  (RReject_diff, which is RReject1 - abs_risk_rouned)
+
+b) disbelief risk skepticism; (RReject_mean, mean of RReject4 - 7)
+
+c) comparative risk skepticism;  (Categorical outcome combine RReject3 and Abs_risk_relative_risk, use 3 levels outcome)
+
+d) percieved risk (numeric and comparative) (RReject1, RReject3)
+
+## Simple Linear regression
+
+### Results Summary
+
+RReject4 - 7 (Reverse the order):
+
+Old:
+
+1 = Disagree a lot, 
+
+2 = Disagree a little, 
+
+3 = Neither agree nor disagree,
+
+4 = Agree a little, 
+
+5 = Agree a lot. 
+
+**NEW**:
+
+1 = Agree a lot, 
+
+2 = Agree a little, 
+
+3 = Neither agree nor disagree,
+
+4 = Disagree a little, 
+
+5 = Disagree a lot.
+
+
+
+The following table shows the estimates of coefficients and corresponding standard errors. The F statistic is the overall test as the ANOVA test (**There is no significant correlation as shown below**). 
+
+```{r}
+#| label: regression1
+
+# Fit linear models for each outcome
+model_RReject1 <- lm(RReject1 ~ Condition, data = df)
+# model_RReject3 <- lm(RReject3 ~ Condition, data = df)
+model_RR_diff <- lm(RReject_diff ~ Condition, data = df)
+# model_RR_diff_abs <- lm(Abs_RReject_diff ~ Condition, data = df)
+model_RReject_mean <- lm(RReject_mean ~ Condition, data = df)
+
+summary(model_RReject1)
+summary(model_RR_diff)
+summary(model_RReject_mean)
+
+# range(df$abs_risk_rounded)
+
+# Summarize the three models
+stargazer(model_RReject1, model_RR_diff, model_RReject_mean,
+          type = "text",
+          title = "Linear Regression Results for RReject1, RReject_diff, and RRejects Average",
+          align = TRUE,
+          single.row = TRUE)
+
+```
+
+
+### Diagnostic Plot
+
+Diagnostic Plots for RReject1, RReject_diff, and RRejects Average respectively. 
+
+```{r}
+#| label: regression2
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(model_RReject1)
+plot(model_RR_diff)
+plot(model_RReject_mean)
+
+```
+
+
+
+## Chi-square tests for RReject3, Comparative Risk Skepticism
+
+Post hoc test of chi-square test of independece referring to "https://pmc.ncbi.nlm.nih.gov/articles/PMC5737889/". 
+
+In the considered problem for all cells in a contingency table, they are correlated, where the Holm-Bonferroni method can be used.
+
+
+```{r}
+#| label: testRReject3
+
+tbl_cross(
+  data = df,
+  row = RReject3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels()
+
+# table(df$RReject3, df$Condition)
+chisq.test(df$RReject3, df$Condition)
+
+temp <- chisq.residuals(table(df$RReject3, df$Condition), 
+                        digits = 4, 
+                std = FALSE, raw = FALSE)
+
+# Store standardized residuals as a matrix
+std_residuals <- matrix(
+  c(-1.0617, 0.6088, 0.4841,
+    -1.5243, -0.3069, 1.7714,
+     2.7258, -0.1065, -2.5703),
+  nrow = 3, byrow = TRUE,
+  dimnames = list(
+    c("higher than", "about the same as", "lower than"),
+    c("Control", "Condition a", "Condition b")
+  )
+)
+
+# Convert the matrix to a data frame and pivot to long format
+residuals_df <- as.data.frame(std_residuals) %>%
+  rownames_to_column(var = "RReject3") %>%
+  pivot_longer(
+    cols = -RReject3, 
+    names_to = "Condition", 
+    values_to = "Std_residual"
+  ) %>%
+  # Calculate two-tailed p-values for the z-scores
+  mutate(
+    p_value = round(2 * pnorm(-abs(Std_residual)), 4)
+  ) %>%  # Adjust p-values using Holm's method
+  mutate(
+    adjusted_p_value = p.adjust(p_value, method = "holm")
+  )
+
+# View the result
+print(residuals_df) %>% kable()
+
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_2,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+fisher.test(df$RReject_comp_2, df$Condition)
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels()
+
+chisq.test(df$RReject_comp_3, df$Condition)
+
+```
+
+## Sensitivity analyses to inform outlier decisions
+
+Models with the full data, and set of models that excludes RReject_diff > 90, and a set of models on only those with RReject_diff > 90.
+
+### Excludes RReject_diff > 90 (size = 500)
+
+```{r}
+#| label: regression3
+
+df1 <- df %>% filter(RReject_diff < 90)
+
+model_RReject1 <- lm(RReject1 ~ Condition, 
+                     data = df1)
+# model_RReject3 <- lm(RReject3 ~ Condition, data = df)
+model_RR_diff <- lm(RReject_diff ~ Condition, 
+                    data = df1)
+# model_RR_diff_abs <- lm(Abs_RReject_diff ~ Condition, data = df)
+model_RReject_mean <- lm(RReject_mean ~ Condition, 
+                         data = df1)
+
+summary(model_RReject1)
+summary(model_RR_diff)
+summary(model_RReject_mean)
+
+
+# Summarize the three models
+stargazer(model_RReject1, model_RR_diff, model_RReject_mean,
+          type = "text",
+          title = "Linear Regression Results for RReject1, RReject_diff, and RRejects Average (RReject_diff < 90)",
+          align = TRUE,
+          single.row = TRUE)
+
+chisq.test(df1$RReject3, df1$Condition)
+
+fisher.test(df1$RReject_comp_2, df1$Condition)
+
+tbl_cross(
+  data = df1,
+  row = RReject3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels()
+
+tbl_cross(
+  data = df1,
+  row = RReject_comp_3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels()
+
+chisq.test(df1$RReject_comp_3, df1$Condition)
+
+
+
+```
+
+### Only with RReject_diff >= 90 (size = 27)
+
+
+```{r}
+#| label: regression4
+df1 <- df %>% filter(RReject_diff >= 90)
+
+model_RReject1 <- lm(RReject1 ~ Condition, 
+                     data = df1)
+# model_RReject3 <- lm(RReject3 ~ Condition, data = df)
+model_RR_diff <- lm(RReject_diff ~ Condition, 
+                    data = df1)
+# model_RR_diff_abs <- lm(Abs_RReject_diff ~ Condition, data = df)
+model_RReject_mean <- lm(RReject_mean ~ Condition, 
+                         data = df1)
+
+summary(model_RReject1)
+summary(model_RR_diff)
+summary(model_RReject_mean)
+
+
+# Summarize the three models
+stargazer(model_RReject1, model_RR_diff, model_RReject_mean,
+          type = "text",
+          title = "Linear Regression Results for RReject1, RReject_diff, and RRejects Average (RReject_diff < 90)",
+          align = TRUE,
+          single.row = TRUE)
+
+fisher.test(df1$RReject3, df1$Condition)
+
+fisher.test(df1$RReject_comp_2, df1$Condition)
+
+tbl_cross(
+  data = df1,
+  row = RReject3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels()
+
+tbl_cross(
+  data = df1,
+  row = RReject_comp_3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p() %>% bold_labels()
+
+fisher.test(df1$RReject_comp_3, df1$Condition)
+
+
+```
+
+
+
+
+

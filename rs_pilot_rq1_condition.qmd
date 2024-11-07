@@ -1,0 +1,500 @@
+---
+title: "Pilot RQ1 analysis"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+library(stargazer)
+library(truncreg)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# TODO: 
+# TODO: may change dataset
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+```
+
+# Understand the Sample 
+
+## Sample Filtering
+
+```{dot}
+digraph consort_diagram {
+
+  # Define graph direction top to bottom 
+  rankdir=TB;
+  # Define node attributes
+  node [shape=box, style="rounded", color="black", fontname=Helvetica, fontsize=20];
+
+  # Define the nodes
+  A [label=<<B>703 </B> Subjects who opened the survey link>];
+  B [label=<<B>694 </B> Subjects who participated in the survey>];
+  C [label=<<B>624 </B> Subjects who met the eligibility criteria>];
+  D [label=<<B>527 </B> Subjects who had valid risk estimates and completed risk rejection questions>];
+
+  # Define the edges
+  A -> B [label=<<FONT POINT-SIZE="20">   Excluded 9 subjects who did not start the survey at all</FONT>>]; 
+  B -> C [label=<<FONT POINT-SIZE="20">   Excluded 70 subjects who did not meet the eligibility criteria</FONT>>];
+  C -> D [label=<<FONT POINT-SIZE="20">   Excluded 97 subjects who did not have valid risk estimates and missingness in risk rejection questions</FONT>>];
+}
+```
+
+## Demographics
+
+```{r}
+#| label: demo
+
+# move to 
+# df %<>%  mutate(
+#     # Convert Experimental condition to factor with labels
+#     Condition = factor(`Experimental condition`, 
+#                        levels = c(1, 2, 3), 
+#       labels = c("Condition a", "Condition b", "Control")),
+#     # Ensure Age is numeric
+#     Age = as.numeric(Age)
+#   )
+
+df %>%
+  dplyr::select(Condition, all_of(risk_calcs)) %>%
+   tbl_summary(by = Condition,
+               statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_caption("**Table 1. Subjects Characteristics**") %>%
+  add_p(test = list(all_continuous() ~ "oneway.test", 
+                    all_categorical() ~ "chisq.test",
+                    Biopsy ~ "fisher.test",
+                    Hyperplasia ~ "fisher.test",
+                    PlaceofBirth ~ "fisher.test",
+                    `Asian/AA` ~ "fisher.test")) %>% 
+  add_overall() %>%
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3") ~ 
+                           "**Experimental Conditions**") %>%
+  modify_header(label ~ "**Characteristics**")
+
+# Experimental Condition` != 3
+```
+
+
+# Research Question 1
+**The question: Does asking about people’s perceived risk of developing breast cancer prior to providing their risk estimate affect the likelihood of them expressing risk skepticism?**
+
+Conduct an experiment with 3 conditions, randomly assigned in a 1:1:1 allocation: 
+
+(a) Risk perceptions measured before participants viewed the Gail model risk questions vs. 
+
+(b) Risk perceptions measured after participants viewed the Gail model risk questions but before they viewed the results vs. 
+
+(c) Risk perceptions measured after participants viewed their risk results. 
+
+Where **c** is the control group, and group **a, b, c** correspond to 1, 2, 3 in the Experimental condition variable.
+
+## Question Breakdown
+
+- 1. Start with measures of central tendency for all risk skepticism measures, because we are going to want to talk about what will be our primary outcome for the longitudinal survey. (**Diagnostics**)
+
+-	2. Three models with experimental condition as predictor, and 3 ways of measuring risk skepticism as outcomes. 
+
+  a. Open text box (RReject_diff = RReject1 - abs_risk_rounded). 
+  b. comparative risk (Combination of RReject3 and Abs_risk_relative_risk). 
+  c. Disbelief questions from Scherer et al. R37 (average of rreject4-rreject7).
+
+```{r}
+#| label: anova_regression
+#| include: false
+typeof(df$Condition) 
+typeof(df$RReject1) 
+typeof(df$RReject3)
+typeof(df$RReject_mean)
+
+# Check wrong input
+for(id in c("R_1LUtAxnLeszwqkC",
+            "R_28RFoTia7YU40yO",
+            "R_3Mo4X2lgxig4ct9")){
+ print(df$abs_risk_rounded[df$ResponseId == id])
+ print(df$RReject1[df$ResponseId == id])
+ print(df$RReject3[df$ResponseId == id])
+ print(df$RReject4[df$ResponseId == id])
+ print(df$RReject_diff[df$ResponseId == id])
+  
+}
+
+table(df$RReject3)
+
+```
+
+
+
+```{r}
+#| label: datatidy
+
+# df %<>%  mutate(Condition = as.character(`Experimental condition`))
+
+# c("R_1LUtAxnLeszwqkC", "R_28RFoTia7YU40yO",
+#             "R_3Mo4X2lgxig4ct9")
+
+# df$RReject1[df$ResponseId == "R_1LUtAxnLeszwqkC"] <- 8
+# df$RReject1[df$ResponseId == "R_28RFoTia7YU40yO"] <- 11
+# df$RReject1[df$ResponseId == "R_3Mo4X2lgxig4ct9"] <- 1000
+
+
+# lm y as RReject1  RReject3 RReject_mean
+# lm()
+# Ensure Condition is treated as a factor
+# df$Condition <- as.factor(df$Condition)
+
+# Fit linear models for each outcome
+model_RReject1 <- lm(RReject1 ~ Condition, data = df)
+# model_RReject3 <- lm(RReject3 ~ Condition, data = df)
+model_RR_diff <- lm(RReject_diff ~ Condition, data = df)
+# model_RR_diff_abs <- lm(Abs_RReject_diff ~ Condition, data = df)
+model_RReject_mean <- lm(RReject_mean ~ Condition, data = df)
+
+# range(df$abs_risk_rounded)
+
+
+# aov_RReject3 <- aov(RReject3 ~ Condition, data = df)
+# 
+# summary(aov_RReject3)
+
+# summary(model_RReject1)
+```
+
+## Simple Linear regression
+
+### Results Summary
+
+RReject1 on the scale 0-1000. Higher means high risk.
+
+RReject3: 
+
+1 = I think my risk is higher than the average woman my age., 
+
+2 = I think my risk is about the same as the average woman my age., 
+
+3 = I think my risk is lower than the average woman my age.
+
+RReject4 - 7 (Reverse the order):
+
+Old:
+
+1 = Disagree a lot, 
+
+2 = Disagree a little, 
+
+3 = Neither agree nor disagree,
+
+4 = Agree a little, 
+
+5 = Agree a lot. 
+
+**NEW**:
+
+1 = Agree a lot, 
+
+2 = Agree a little, 
+
+3 = Neither agree nor disagree,
+
+4 = Disagree a little, 
+
+5 = Disagree a lot.
+
+
+
+The following table shows the estimates of coefficients and corresponding standard errors. The F statistic is the overall test as the ANOVA test (**There is no significant correlation as shown below**). 
+
+```{r}
+#| label: regression1
+
+# Summarize the three models
+stargazer(model_RReject1, model_RR_diff, model_RReject_mean,
+          type = "text",
+          title = "Linear Regression Results for RReject1, RReject_diff, and RRejects Average",
+          align = TRUE,
+          single.row = TRUE)
+
+```
+
+### Diagnostic Plot
+
+Diagnostic Plots for RReject_diff, Abs_RReject_diff, and RRejects Average respectively. 
+
+```{r}
+#| label: regression2
+
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(model_RReject1)
+plot(model_RR_diff)
+plot(model_RReject_mean)
+
+```
+
+
+
+```{r}
+#| label: visualHisto
+
+# lm y as RReject1  RReject3 RReject_mean
+
+p1 <- create_histogram(df, "Abs_RReject_diff", 
+                       c(seq(-30, 95, 10), seq(100, 1000, by = 100)), 
+  "Histogram of RReject1 - abs_risk_rounded, absolute value")
+p2 <- create_histogram(df, "RReject_diff", 
+            c( seq(-100, 95, 10), seq(100, 1000, by = 100)), 
+                 "Histogram of RReject1 - abs_risk_rounded")
+p3 <- create_histogram(df, "RReject_mean", seq(0, 5, 0.5), 
+                 "Histogram of Average of RReject4 - RReject7")
+
+print(p1)
+print(p2)
+print(p3)
+
+```
+
+## Chi-squared test of Comparative Risk Skepticism and Condition
+
+Conduct an experiment with 3 conditions, randomly assigned in a 1:1:1 allocation: 
+
+(a) Risk perceptions measured before participants viewed the Gail model risk questions vs. 
+
+(b) Risk perceptions measured after participants viewed the Gail model risk questions but before they viewed the results vs. 
+
+(c) Risk perceptions measured after participants viewed their risk results. 
+
+
+
+
+```{r}
+#| label: testRReject3
+
+# too many cells with small counts
+tbl_cross(
+  data = df,
+  row = RReject_comp_1,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+)  %>% bold_labels()# Add p-value from chi-squared test, test = "chisq.test"
+
+
+fisher.test(table(df$RReject_comp_1, df$Condition), simulate.p.value=TRUE)
+
+# Print the table with counts, percentages, and chi-squared test p-value
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_2,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+
+tbl_cross(
+  data = df,
+  row = RReject_comp_3,       
+  col = Condition,        
+  percent = "cell"       # Display counts and percentages
+) %>%
+  add_p(test = "fisher.test") %>% bold_labels()
+
+```
+
+## 0 truncated linear regression for Abs_RReject_diff and Condition (for reference)
+
+In the truncated linear regression model, there isn't a direct equivalent to the F-statistic that you would see in a standard linear regression model. In linear regression, the F-statistic tests whether the overall model is significantly better than a model with no predictors. 
+
+**The model suggests that Condition has a significant negative effect on Abs_RReject_diff. Specifically, subjects in Condition b and Control have significantly lower Abs_RReject_diff scores than those in Condition a.**
+
+```{r}
+#| label: test0trunc
+
+truncated_model <- truncreg(Abs_RReject_diff ~ Condition, 
+                            data = df, point = 0, 
+                            direction = "left")
+summary(truncated_model)
+
+
+# Get residuals from the truncated model
+residuals <- residuals(truncated_model)
+
+# Plot residuals to check for any patterns
+plot(df$Condition, residuals, main = "Residuals vs Condition", ylab = "Residuals", xlab = "Condition")
+
+plot(fitted(truncated_model), 
+     residuals(truncated_model), main = "Residuals vs Fitted", 
+     xlab = "Fitted values", ylab = "Residuals")
+abline(h = 0, col = "red")
+
+qqnorm(residuals(truncated_model))
+qqline(residuals(truncated_model), col = "red")
+```
+
+
+Sigma represents the standard deviation of the residuals (errors) in the truncated model. It tells you how much the observed RReject1 values vary from the model's predicted values after accounting for truncation. 
+
+The coefficients reflect the relationship only for the observed part of the data (i.e., the portion of the outcome variable that is greater than 0). These coefficients appear larger because the model is adjusting for the fact that part of the data is missing due to truncation.
+
+
+# Subject Numeracy
+
+
+Subject numeracy:   
+
+- Q1: How good are you at working with fractions?   
+- Q2: How good are you at figuring out how much a shirt will cost if it is 25% off?    
+- Q3: How often do you find numerical information to be useful?  
+
+1 = Not at all good /  6 = Extremely good
+
+1 = Never / 6 = Very often
+
+## Exploratory and Linear Regression
+
+```{r}
+#| label: subnum
+
+hist(df$SubNum_mean)
+df$RReject_diff_attitude <- ifelse(df$RReject_diff == 0,
+                      "Totally Agree", "Not Totally Agree")
+
+df %>% tbl_summary(
+      include = RReject_diff_attitude,
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels()
+
+
+
+```
+
+
+```{r}
+#| label: testsubnum
+
+# TODO: Remove subjects with RReject_diff == 0
+# TODO: correlation between Subjective Numeracy and Risk Difference Score (absolute value, original value) 
+# The idea behind this is that it suggests subjects with RReject_diff 0 is a different type of population, using this as a categorical variable 
+
+# Fit linear models for each outcome
+# Model with RReject_diff as outcome
+model_RReject_diff <- lm(RReject_diff ~ SubNum_mean + RReject_diff_attitude, data = df)
+
+# Model with Abs_RReject_diff as outcome
+model_Abs_RReject_diff <- lm(Abs_RReject_diff ~ SubNum_mean + RReject_diff_attitude, data = df)
+
+stargazer(model_RReject_diff, model_Abs_RReject_diff, type = "text",
+          title = "Linear Models: RReject_diff and Abs_RReject_diff",
+          align = TRUE, single.row = TRUE)
+
+par(mfrow = c(2, 2))  # Set layout for 2x2 diagnostic plots
+plot(model_RReject_diff)
+plot(model_Abs_RReject_diff)
+
+```
+
+## Truncated Linear Regression
+
+```{r}
+#| label: testsubnum2
+
+truncated_model <- truncreg(Abs_RReject_diff ~ 
+                        SubNum_mean + RReject_diff_attitude, 
+                            data = df, point = 0, 
+                            direction = "left")
+summary(truncated_model)
+
+```
+
+
+```{r}
+#| label: test
+#| 
+
+
+# TODO: Risk rejection, aka, prefer risk skepticism. Over estimate, under estimate, accurate 
+
+# TODO: redo rq1 and start rq2
+
+# TODO: combine RReject3 (people's estimate) and Abs_risk_relative_text, (actual comparative result)
+
+# TODO: start with a exploratory analysis and cross table of RReject3 and Abs_risk_relative_text, a 3 by 3 tables, end up with a possible 7 categories outcome variable, show the code and also display the distribution of this outcome. Together with the code. 
+
+# TODO: skepticism on the absolute scale (suffer from outliers issue, cannot be explained by lower numeracy, system error? loss direction information), skepticism on the comparative scale (combine RReject3 and Abs_risk_relative_risk, could be complex), skepticism on the likert “belief” scale (does not imply direction, information loss)
+
+# TODO: combined outcome, proportional odds logistic regression
+
+```
+
+
+```{r}
+#| label: test1
+
+# TODO: sensitivity analysis with, RReject_diff as outcome, condition as predictor, but add flag variable to indicate the bimodal feature of the RReject_diff
+
+# TODO: Will do how many/what proportion of the sample has RReject1 values of:
+# More than 125
+# More than 200
+# More than 300
+
+# TODO: code 1 = Disagree a lot, 
+# 
+# 2 = Disagree a little, 
+# 
+# 3 = Neither agree nor disagree,
+# 
+# 4 = Agree a little, 
+# 
+# 5 = Agree a lot. Code 5 to disagree a lot, reverse the order
+
+```
+
+

@@ -17,4 +17,277 @@ format:
 editor: source
 ---
 
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(ggthemes) # for color blind 
+library(naniar)
+library(visdat)
+library(expss)
+library(knitr)
+library(gtsummary)
+library(ltm)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_dataset.rds") 
+
+no_df <- readRDS("../data/processing/rs_pilot_no_abs_risk_df_dataset.rds")
+
+invalid_df <- readRDS("../data/processing/rs_pilot_invalid_abs_risk_df_dataset.rds")
+
+```
+
+
+```{r}
+#| label: vars
+# Risk Calcs vars 
+cols <- c("ResponseId")
+risks_sub <- c("abs_risk_rounded", "abs_risk_lifetime_rounded",
+           "abs_risk_age_group_rounded",  "abs_risk_relative_text")
+risk_rej_cols <- paste0("RReject", 1:7)
+risk_calcs <- c("Age", "Race/Ethnicity", "PlaceofBirth", "Asian/AA",
+                "FirstMenses","FirstChild", "family_history", "Biopsy",
+                "Num_biopsies", "Hyperplasia")
+
+```
+# Risk Rejection Analysis
+
+## Explorative Analysis of Risks
+
+### Subjects Do Not Have Risk Estimates
+```{r}
+#| label: norisk
+#| 
+
+no_df %>% mutate(Age = as.numeric(Age)) %>% 
+  dplyr::select(all_of(risk_calcs)) %>%   
+  tbl_summary(
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels()
+
+```
+
+
+### Subjects Have Invalid Risk Estimates
+
+```{r}
+#| label: invalidrisk
+#| 
+
+invalid_df %>% mutate(Age = as.numeric(Age)) %>% 
+  dplyr::select(all_of(risk_calcs)) %>%   
+  tbl_summary(
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels()
+
+```
+
+
+### Subjects Characteristics of Final Dataset
+
+```{r}
+#| label: tab1
+df %>% mutate(Condition = as.character(`Experimental condition`),
+              Age = as.numeric(Age)) %>% 
+  dplyr::select(Condition, all_of(risk_calcs)) %>%
+   tbl_summary(by = Condition,
+               statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_caption("**Table 1. Subjects Characteristics**") %>%
+  add_p(test = list(all_continuous() ~ "oneway.test", 
+                    all_categorical() ~ "chisq.test",
+                    Biopsy ~ "fisher.test",
+                    Hyperplasia ~ "fisher.test",
+                    PlaceofBirth ~ "fisher.test",
+                    `Asian/AA` ~ "fisher.test")) %>% 
+  add_overall() %>%
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3") ~ 
+                           "**Experimental Conditions**")
+
+```
+
+### Subjects Have Very High Vs. Very Low Risk Estimates 
+
+#### Top 2.5% High Risk Estimates 
+
+```{r}
+#| label: risktop
+df %>% slice_max(order_by = abs_risk_rounded, prop = 0.025) %>%
+        dplyr::select(all_of(c(cols, risks_sub, risk_rej_cols, risk_calcs))) %>%
+       create_basic_html_table(title =  "Subjects with Top 2.5% High Risk Estimates")
+
+df %>% slice_min(order_by = abs_risk_rounded, prop = 0.025) %>%
+        dplyr::select(all_of(c(cols, risks_sub, risk_rej_cols, risk_calcs))) %>%
+       create_basic_html_table(title =  "Subjects with Top 2.5% Low Risk Estimates")
+
+```
+
+
+#### Top 2.5% Low Risk Estimates 
+
+```{r}
+#| label: risklow
+
+df %>% slice_min(order_by = abs_risk_rounded, prop = 0.025) %>%
+        dplyr::select(all_of(c(cols, risks_sub, risk_rej_cols, risk_calcs))) %>%
+       create_basic_html_table(title =  "Subjects with Top 2.5% Low Risk Estimates")
+
+```
+
+## Risk Estimates and Risk Rejections Overall
+
+### Histograms
+
+The one subjects answered RReject1 as 10000 was removed. 
+
+```{r}
+#| label: histo
+# Generate histograms for each variable
+bin_breaks <- c(seq(0, 90, by = 10), seq(100, 1000, by = 100))
+p1 <- create_histogram(df, "RReject_diff", bin_breaks, "Histogram of RReject_diff")
+p2 <- create_histogram(df, "abs_risk_rounded",
+                       seq(0, 90, by = 5), "Histogram of abs_risk_rounded")
+p3 <- create_histogram(df, "RReject1", bin_breaks, "Histogram of RReject1")
+p4 <- create_histogram(df, "abs_risk_lifetime_rounded", 
+                      c(seq(0, 240, by = 10), seq(250, 750, by = 50)), 
+                       "Histogram of abs_risk_lifetime_rounded")
+
+# Display the histograms
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+```
+
+### Risk Reletive Text
+
+```{r}
+#| label: risktext
+
+# how  “abs_risk_rounded”, and “abs_risk_age_group_rounded” 
+# are related where “abs_risk_relative_text” is “about the same as”
+
+df %>% mutate(abs_risk_rounded = as.numeric(abs_risk_rounded),
+              abs_risk_age_group_rounded = as.numeric(abs_risk_age_group_rounded)) %>% 
+   tbl_summary(by = abs_risk_relative_text,
+               include = c(abs_risk_rounded, abs_risk_age_group_rounded),
+               statistic = list(
+      all_continuous() ~ "{mean} ({sd})"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels() %>% 
+  add_p(test = list(all_continuous() ~ "oneway.test") ) %>% 
+  add_overall() %>% 
+  modify_header(label ~ "**Risk Estimates**") |>
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3") ~ 
+                           "**Relative Risk Category**")
+
+```
+
+###  RReject4 – RReject7
+
+#### Cronbach’s Alpha for RReject4 - RReject7
+
+```{r}
+#| label: rr47part1
+
+# cronbach.alpha(  df %>% dplyr::select(all_of(c(paste0("RReject", 4:7))))  )
+# print("Standardized Cronbach's alpha test: ")
+cron_alpha <- cronbach.alpha(  df %>% dplyr::select(all_of(c(paste0("RReject", 4:7)))) ,
+                 standardized = TRUE,
+                 CI = TRUE)
+
+# cron_alpha$n
+# cron_alpha$ci
+# cron_alpha$B
+```
+
+**Standardized Cronbach's alpha for RReject4 - RReject7** is, `r round(cron_alpha$alpha, 4)`, a 95% Bootstrap CI based on `r cron_alpha$B` samples is (`r round(cron_alpha$ci, 4)`). 
+
+There are `r cron_alpha$p` items, `r cron_alpha$n` sample units. 
+
+#### Descriptive
+
+```{r}
+#| label: rr47part2
+
+df %>%
+  mutate(
+    across(
+      c(RReject4, RReject5, RReject6, RReject7),
+      ~ factor(.,
+        levels = c(1, 2, 3, 4, 5),
+        labels = c("Disagree a lot", "Disagree a little", 
+                   "Neither agree nor disagree", "Agree a little", "Agree a lot")
+      )
+    )
+  ) %>% tbl_summary(
+      include = c(paste0("RReject", 4:7)),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels()
+```
+
+
+```{r}
+#| label: rr47part3
+#| results: asis
+
+# Loop over each column name
+for (col_name in paste0("RReject", 4:7)) {
+  # Generate the child document for the current column
+  child_file <- generate_desc_summary_report(col_name, "df")
+  # Include the child document
+  cat(knitr::knit_child(child_file, quiet = TRUE))
+}
+
+```
+
+
+
+```{r}
+#| label: test
+
+
+```
 

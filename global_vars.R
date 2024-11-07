@@ -29,7 +29,7 @@ conditions <- c("Experimental condition", "Pre-estimate")
 
 # Risk Calcs vars 
 
-risk_calcs <- c("Age", "Race/Ethnicity", "PlaceofBirth", "Asian/AA",
+risk_calcs <- c("Age", "Race_Ethnicity", "PlaceofBirth", "Asian/AA",
                 "FirstMenses","FirstChild", "family_history", "Biopsy",
                 "Num_biopsies", "Hyperplasia")
 
@@ -101,6 +101,12 @@ demo_cols <- c("Age", "Race")
 ## TODO: vars for Research Questions
 rs4_vars <- c("Use_of_data", "Speeder", "Attflag1", 
               "Attflag2", "Attcount1", "Attcount2")
+# trust subscales
+trust_subscales <- c("GroupMed_Suspicion", "GroupMed_Disparities",
+                     "HealthSys_Competence", "HealthSys_Values")
 
+# rs outcomes
+rs_outcomes <- c("Abs_RReject_diff", "RReject_diff", 
+                 "RReject_mean", "RReject_comp_3")
 
 

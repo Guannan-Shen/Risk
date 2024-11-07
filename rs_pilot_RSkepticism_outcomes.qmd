@@ -1,0 +1,306 @@
+---
+title: "Risk Skepticism Outcomes Explore"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(knitr)
+library(gtsummary)
+library(stargazer)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+# TODO: 
+# TODO: may change dataset
+# 3_rs_pilot_data_riskrejection.R
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_modified_dataset.rds") 
+
+## abs_risk_relative_text
+
+```
+
+# Explore: how to define Risk Skepticism outcomes
+
+## Possible Outcomes
+
+### Skepticism on the absolute scale (Absolute numeric risk skepticism)
+
+- (Absolute value of) Difference between RReject1 and breast cancer risk estimates (abs_risk_rounded) 
+
+- RReject1 Question:
+  Your risk of getting breast cancer in the next 10 years is estimated as **abs_risk_rounded** out of 1,000. You may or may not agree with that estimate. **Q:** What do you believe is your risk of getting breast cancer in the next 10 years? (Your answer can be the same or different from the estimate you were given. We want to know your opinion.)
+  
+- Key part of code "RReject_diff = RReject1 - abs_risk_rounded" and "Abs_RReject_diff = abs(RReject_diff)". 
+  
+- This outcome suffers from the outliers issue, which cannot be explained by lower numeracy (system error?). When the absolute value is used, there is loss of information on direction (over/underestimate). 
+
+
+As shown below:
+
+- Long fat tail.
+- Outliers were produced by overestimates.
+
+```{r}
+#| label: diff
+
+p0 <- create_histogram(df, "Abs_RReject_diff", 
+                       c(seq(-30, 95, 10), seq(100, 1000, by = 100)), 
+  "Histogram of RReject1 - abs_risk_rounded, absolute value")
+p1 <- create_histogram(df, "RReject_diff", 
+            c( seq(-100, 95, 10), seq(100, 1000, by = 100)), 
+                 "Histogram of RReject1 - abs_risk_rounded")
+
+print(p0)
+print(p1)
+
+summarize_statistics(df, "RReject_diff") %>%
+   create_basic_html_table(title = 
+                  "Descriptive Summary of RReject_diff")
+
+summarize_statistics(df, "Abs_RReject_diff") %>%
+   create_basic_html_table(title = 
+                  "Descriptive Summary of Abs_RReject_diff")
+
+print("RReject1 cutoffs:")
+range(df$RReject1)
+
+df %>%
+  summarise(
+    count_gt_125 = sum(RReject1 > 125, na.rm = TRUE),
+    prop_gt_125 = mean(RReject1 > 125, na.rm = TRUE),
+    
+    count_gt_200 = sum(RReject1 > 200, na.rm = TRUE),
+    prop_gt_200 = mean(RReject1 > 200, na.rm = TRUE),
+    
+    count_gt_300 = sum(RReject1 > 300, na.rm = TRUE),
+    prop_gt_300 = mean(RReject1 > 300, na.rm = TRUE)
+  ) %>% kable()
+quantile(df$RReject1, seq(0.8, 1, 0.01)) %>% kable()
+
+
+print("RReject_diff cutoffs:")
+
+range(df$RReject_diff)
+
+df %>%
+  summarise(
+    count_gt_125 = sum(RReject_diff > 125, na.rm = TRUE),
+    prop_gt_125 = mean(RReject_diff > 125, na.rm = TRUE),
+    
+    count_gt_200 = sum(RReject_diff > 200, na.rm = TRUE),
+    prop_gt_200 = mean(RReject_diff > 200, na.rm = TRUE),
+    
+    count_gt_300 = sum(RReject_diff > 300, na.rm = TRUE),
+    prop_gt_300 = mean(RReject_diff > 300, na.rm = TRUE)
+  ) %>% kable()
+quantile(df$RReject_diff, seq(0.8, 1, 0.01)) %>% kable()
+
+
+# sum(df$RReject1 == 0)
+# range(df$RReject1)
+df %>%
+  summarise(
+    count_eq_0 = sum(RReject1 == 0, na.rm = TRUE),
+    prop_eq_0 = mean(RReject1 == 0, na.rm = TRUE)
+  )
+```
+
+
+### Skepticism on the comparative scale (Comparative risk skepticism)
+
+- Combination of RReject3 and Abs_risk_relative_risk
+  
+- RReject3 Question:
+  Your risk of getting breast cancer in the next 10 years is estimated as **abs_risk_relative_text** the average woman your age. You may or may not agree with this information. **Q:** What do you believe is your risk of getting breast cancer, compared to the average woman your age? (Your answer can be the same or different from the estimate you were given. We want to know your opinion.)
+  a. I think my risk is higher than the average woman my age.  (1) 
+  
+  b. I think my risk is about the same as the average woman my age.  (2) 
+  
+  c. I think my risk is lower than the average woman my age.  (3) 
+  
+- This outcome might be too complex, and can be 7 categories, 5 categories and 3 categories, or continuous (ordinal).
+
+- Code example: 
+
+
+    mutate(
+
+    # Create RReject_comp_1 with the desired 7 levels
+    
+    RReject_comp_1 = case_when(
+    
+      # Accurate estimates when both are the same
+      
+      RReject3 == "higher than" & abs_risk_relative_text == "higher than" ~ "accurate estimate",
+      
+      RReject3 == "about the same as" & abs_risk_relative_text == "about the same as" ~ "accurate estimate",
+      
+      RReject3 == "lower than" & abs_risk_relative_text == "lower than" ~ "accurate estimate",
+      
+      # Overestimate cases
+      RReject3 == "higher than" & abs_risk_relative_text == "about the same as" ~ "overestimate, about the same as",
+      RReject3 == "higher than" & abs_risk_relative_text == "lower than" ~ "very overestimate, lower than",
+      
+      # Underestimate cases
+      RReject3 == "lower than" & abs_risk_relative_text == "about the same as" ~ "underestimate, about the same as",
+      RReject3 == "lower than" & abs_risk_relative_text == "higher than" ~ "very underestimate, higher than",
+      
+      # New cases for "about the same as"
+      RReject3 == "about the same as" & abs_risk_relative_text == "higher than" ~ "underestimate, higher than",
+      RReject3 == "about the same as" & abs_risk_relative_text == "lower than" ~ "overestimate, lower than",
+      
+      # Default case (for missing or unclassified combinations)
+      TRUE ~ NA_character_
+    )
+    ) %>%
+    # Order the levels of RReject_comp_1
+    mutate(
+     RReject_comp_1 = factor(
+      RReject_comp_1,
+      levels = c(
+        "very underestimate, higher than",
+        "underestimate, about the same as",
+        "underestimate, higher than",
+        "accurate estimate",
+        "overestimate, lower than",
+        "overestimate, about the same as",
+        "very overestimate, lower than"
+      )
+    )) 
+    
+
+
+```{r}
+#| label: comparative
+
+# abs_risk_relative_text
+
+df %>% tbl_summary(
+      include = c(RReject3, abs_risk_relative_text),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)") %>% add_n()  %>% 
+  bold_labels() %>% 
+  modify_header(label ~ "**Characteristics**")
+
+tbl_cross(
+  data = df,
+  row = RReject3,       
+  col = abs_risk_relative_text,  
+  missing_text = "Missing",
+  percent = "cell"       # Display counts and percentages
+) %>% bold_labels() %>% 
+  modify_spanning_header(all_stat_cols() ~ "**Breast cancer relative risk (woman age group average)**")
+
+
+df %>% tbl_summary(
+      include = c(RReject_comp_1, RReject_comp_2, RReject_comp_3),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    missing_text = "(Missing)",
+    label = list(
+                RReject_comp_1 ~ "RReject_comp_1: seven groups",
+                RReject_comp_2 ~ "RReject_comp_2: five groups",
+                RReject_comp_3 ~ "RReject_comp_3: three groups")) %>% 
+  add_n()  %>% 
+  bold_labels() %>% 
+  modify_header(label ~ "**Characteristics**")
+
+
+```
+
+  
+### Skepticism on the likert “belief” scale (Disbelief risk skepticism)
+
+- Average of RReject4 - RReject7
+
+- Key part of code, "RReject_mean = rowMeans(across(all_of(paste0("RReject", 4:7))))"
+
+- Questions: 
+  a. Overall, how much do you disagree or agree with your personal breast cancer risk estimate?
+  b. In my opinion, my personal breast cancer risk estimate was believable.
+  c. In my opinion, my personal breast cancer risk estimate was convincing.
+  d. In my opinion, my personal breast cancer risk estimate was accurate.
+  
+- Answers: 1 = Disagree a lot, 2 = Disagree a little, 3 = Neither agree nor disagree, 4 = Agree a little, 5 = Agree a lot
+
+**NEW**:
+
+1 = Agree a lot, 
+
+2 = Agree a little, 
+
+3 = Neither agree nor disagree,
+
+4 = Disagree a little, 
+
+5 = Disagree a lot.
+
+
+- This outcome does not imply direction (over/underestimate), information loss.
+
+
+As shown below:
+
+- Not an ideal bell-shaped continuous variable.
+- There are inflated distributions at the integer levels. 
+
+```{r}
+#| label: likert
+
+p3 <- create_histogram(df, "RReject_mean", seq(0, 5, 0.25), 
+                 "Histogram of Average of RReject4 - RReject7")
+
+print(p3)
+summarize_statistics(df, "RReject_mean") %>%
+   create_basic_html_table(title = 
+                  "Descriptive Summary of RReject_mean")
+```
+
+
+
+
+```{r}
+#| label: test1
+
+```
+
+
+

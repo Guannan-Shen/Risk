@@ -1,0 +1,422 @@
+---
+title: "RReject4 - RReject7"
+author: "Risk Rejection Team: Guannan Shen"
+date: last-modified
+execute: 
+  warning: false
+  echo: false
+format:
+  html:
+    toc: true
+    toc-depth: 5
+    toc-title: "Jump To"
+    highlight-style: github
+    code-line-numbers: true
+    page-layout: article
+    embed-resources: true
+editor: source
+---
+
+```{r}
+#| label: libraries
+#| include: false
+
+## set up workspace
+rm(list = ls())
+library(tidyverse)
+library(magrittr)
+library(gt)       # html table 
+library(ggthemes) # for color blind 
+library(naniar)
+library(visdat)
+library(expss)
+library(knitr)
+library(gtsummary)
+library(ltm) # cronbach.alpha
+library(truncreg)
+
+# helper functions
+source("./basic.R")       # R functions definitely applicable to other projs
+source("./helper.R")      # data wrangling, renaming functions for this proj
+source("./data_clean_time.R")    # time cols related functions 
+source("./table_helper.R")
+source("./missing_helper.R")
+source("./figure_helper.R")
+
+```
+
+
+```{r}
+#| label: global_vars
+#| include: false
+
+source("./global_vars.R")
+
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_dataset.rds") 
+```
+
+
+##  RReject4 – RReject7
+
+### Cronbach’s Alpha Measurement for RReject4 - RReject7
+
+```{r}
+#| label: rr47part1
+
+# cronbach.alpha(  df %>% dplyr::select(all_of(c(paste0("RReject", 4:7))))  )
+# print("Standardized Cronbach's alpha test: ")
+cron_alpha <- cronbach.alpha(  df %>% dplyr::select(all_of(c(paste0("RReject", 4:7)))) ,
+                 standardized = TRUE,
+                 CI = TRUE)
+
+# cron_alpha$n
+# cron_alpha$ci
+# cron_alpha$B
+```
+
+**Standardized Cronbach's alpha for RReject4 - RReject7** is, `r round(cron_alpha$alpha, 4)`, a 95% Bootstrap CI based on `r cron_alpha$B` samples is (`r round(cron_alpha$ci, 4)`). 
+
+There are `r cron_alpha$p` items, `r cron_alpha$n` sample units. 
+
+### Descriptive
+
+- Q4 Overall, how much do you disagree or agree with your personal breast cancer risk estimate? 
+- Q5 In my opinion, my personal breast cancer risk estimate was believable.  
+- Q6 In my opinion, my personal breast cancer risk estimate was convincing.  
+- Q7 In my opinion, my personal breast cancer risk estimate was accurate.  
+
+```{r}
+#| label: rr47part3
+#| results: asis
+
+# Loop over each column name
+for (col_name in paste0("RReject", 4:7)) {
+  # Generate the child document for the current column
+  child_file <- generate_desc_summary_report(col_name, "df")
+  # Include the child document
+  cat(knitr::knit_child(child_file, quiet = TRUE))
+}
+
+```
+
+
+```{r}
+#| label: rr47part2
+
+df %<>%
+  mutate(
+    across(
+      c(RReject4, RReject5, RReject6, RReject7),
+      ~ factor(.,
+        levels = c(1, 2, 3, 4, 5),
+        labels = c("Disagree a lot", "Disagree a little", 
+                   "Neither agree nor disagree", "Agree a little", "Agree a lot")
+      ))  ) 
+
+df %>% tbl_summary(
+      include = c(paste0("RReject", 4:7)),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+  ) %>% add_n()  %>% 
+  bold_labels()
+```
+## Figures
+
+### Diff of RReject1 and Risk Estimates VS. RReject4 - 7
+
+
+#### All values 
+**Important: ** Manually fix typos in RReject1.
+
+- ResponseId abs_risk_rounded	RReject1	RReject_diff	RReject2    
+- R_1LUtAxnLeszwqkC	8	  **0.008**	-7.992	Using the percent above **(Change to 8)**  
+- R_28RFoTia7YU40yO	11	**0.011**	-10.989	Same   **(Change to 11)**
+- R_3Mo4X2lgxig4ct9	16	**10000**	9984	Noa **(Change to 1000)**
+
+
+
+```{r}
+#| label: boxVio
+#| layout-ncol: 2
+
+df %<>%   mutate(RReject_diff = case_when(
+    ResponseId == "R_1LUtAxnLeszwqkC" ~ 0,
+    ResponseId == "R_28RFoTia7YU40yO" ~ 0,
+    ResponseId == "R_3Mo4X2lgxig4ct9" ~ 984,
+    TRUE ~ RReject_diff  # Keep the original value for all other rows
+  )) %>% 
+    mutate(RReject_diff = abs(RReject_diff)) 
+    
+
+for (col_name in paste0("RReject", 4:7)) {
+  p1 <- create_boxplot_with_dots(df, col_name, "RReject_diff")
+  p2 <- create_violin_plot(df, col_name, "RReject_diff")
+  print(p1)
+  print(p2)
+}
+
+
+```
+
+#### Difference filtered by less than 125 
+
+```{r}
+#| label: boxVio2
+#| layout-ncol: 2
+
+df %<>% filter(RReject_diff <= 125)
+    
+
+for (col_name in paste0("RReject", 4:7)) {
+  p1 <- create_boxplot_with_dots(df, col_name, "RReject_diff")
+  p2 <- create_violin_plot(df, col_name, "RReject_diff")
+  print(p1)
+  print(p2)
+}
+
+
+```
+
+## Correlation Tests
+
+**Summary**:  
+In our case, there is **significant moderate negative correlation between RReject_mean and absolute values of RReject_diff** (RReject1 - abs_risk_rounded).
+
+**Important: ** Manually fix typos in RReject1.
+
+- ResponseId abs_risk_rounded	RReject1	RReject_diff	RReject2    
+- R_1LUtAxnLeszwqkC	8	  **0.008**	-7.992	Using the percent above **(Change to 8)**  
+- R_28RFoTia7YU40yO	11	**0.011**	-10.989	Same   **(Change to 11)**
+- R_3Mo4X2lgxig4ct9	16	**10000**	9984	Noa **(Change to 1000)**
+
+```{r}
+#| label: data
+df <- readRDS("../data/processing/rs_pilot_risk_rejection_dataset.rds") 
+
+df %<>%   mutate(RReject_diff = case_when(
+    ResponseId == "R_1LUtAxnLeszwqkC" ~ 0,
+    ResponseId == "R_28RFoTia7YU40yO" ~ 0,
+    ResponseId == "R_3Mo4X2lgxig4ct9" ~ 984,
+    TRUE ~ RReject_diff  # Keep the original value for all other rows
+  ))
+
+df %<>% mutate(Abs_RReject_diff = abs(RReject_diff))
+
+df %<>%  mutate(
+    # Mean score for Subnum1 - Subnum3
+    # Or using dplyr::select instead of across
+    SubNum_mean = round(rowMeans(across(all_of(paste0("SubNum", 1:3))), 
+                                 na.rm = TRUE), 2),
+    # all_of(paste0("RReject", 4:7))
+    RReject_mean = rowMeans(across(all_of(paste0("RReject", 4:7)))) ) 
+
+# df %>% dplyr::select(all_of(paste0("RReject", 4:7)))
+# df %>% dplyr::select(all_of(paste0("SubNum", 1:3)))
+# # subject cols, categorical
+# sub_label_cols <- paste0("SubNum", 1:3)
+```
+
+### Cronbach’s Alpha Measurement for SubNum1 - SubNum3
+
+Consistency of low numeracy:   
+
+- Q1: How good are you at working with fractions?  
+- Q2: How good are you at figuring out how much a shirt will cost if it is 25% off?  
+- Q3: How often do you find numerical information to be useful?
+
+```{r}
+#| label: sumNum
+
+cron_alpha <- cronbach.alpha(  df %>% 
+                        dplyr::select(all_of(paste0("SubNum", 1:3))),
+                 standardized = TRUE,
+                 CI = TRUE,
+                 na.rm = TRUE)
+
+```
+
+
+**Standardized Cronbach's alpha for SubNum1 - SubNum3** is, `r round(cron_alpha$alpha, 4)`, a 95% Bootstrap CI based on `r cron_alpha$B` samples is (`r round(cron_alpha$ci, 4)`). 
+
+There are `r cron_alpha$p` items, `r cron_alpha$n` sample units. 
+
+$\alpha \geq 0.9$: Excellent.  
+
+$0.9 \gt \alpha \geq 0.8$: Good. 
+
+$0.8 \gt \alpha \geq 0.7$: Acceptable. 
+
+### Correlation tests with all data points
+
+**Problems:**  
+- Outliers  
+- Zero-inflated distribution or Zero-truncated distribution (RReject_diff)  
+- Ordinal data, not continuous (RReject_mean, SubNum_mean)
+
+**Preferred Method: **Spearman's rank correlation coefficient. 
+
+The assumptions for Spearman’s Rho include:
+
+- Continuous or ordinal   
+- Monotonicity
+
+```{r}
+#| label: rr47_desc_mean
+#| results: asis
+
+# Loop over each column name
+for (col_name in c("RReject_mean", "SubNum_mean")) {
+  # Generate the child document for the current column
+  child_file <- generate_desc_summary_report(col_name, "df")
+  # Include the child document
+  cat(knitr::knit_child(child_file, quiet = TRUE))
+}
+
+```
+
+
+```{r}
+#| label: tests1
+
+# pairwise test 
+# expand.grid(vars, vars)
+cor.test(df[["RReject_mean"]], df[["SubNum_mean"]], method = "pearson")
+cor.test(df[["RReject_mean"]], df[["SubNum_mean"]], method = "spearman")
+
+cor.test(df[["RReject_mean"]], df[["RReject_diff"]], method = "pearson")
+cor.test(df[["SubNum_mean"]], df[["RReject_diff"]], method = "pearson")
+
+cor.test(df[["RReject_mean"]], df[["Abs_RReject_diff"]], method = "spearman")
+cor.test(df[["SubNum_mean"]], df[["Abs_RReject_diff"]], method = "spearman")
+
+```
+#### 
+
+```{r}
+#| label: testAll3
+
+# TODO: Remove subjects with RReject_diff == 0
+# TODO: correlation between Subjective Numeracy and Risk Difference Score (absolute value, original value) 
+# The idea behind this is that it suggests subjects with RReject_diff 0 is a different type of population, using this as a categorical variable 
+```
+
+
+#### Scatter plots with linear trend (all data points)
+
+```{r}
+#| label: corfigs1
+
+# create_scatter (df, x, y)
+p1 <- create_scatter_with_trend(df, "RReject_mean", "RReject_diff")
+p2 <- create_scatter_with_trend(df, "RReject_mean", "Abs_RReject_diff")
+p3 <- create_scatter_with_trend(df, "RReject_mean", "SubNum_mean")
+p4 <- create_scatter_with_trend(df, "SubNum_mean", "RReject_diff")
+p5 <- create_scatter_with_trend(df, "SubNum_mean", "Abs_RReject_diff")
+
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+print(p5)
+```
+
+
+
+### Correlation tests without Outliers: filtering by Abs_RReject_diff < 125
+
+```{r}
+#| label: test2
+
+df %<>% filter(RReject_diff <= 125)
+
+cor.test(df[["RReject_mean"]], df[["SubNum_mean"]], method = "pearson")
+cor.test(df[["RReject_mean"]], df[["SubNum_mean"]], method = "spearman")
+
+cor.test(df[["RReject_mean"]], df[["RReject_diff"]], method = "pearson")
+cor.test(df[["SubNum_mean"]], df[["RReject_diff"]], method = "pearson")
+
+cor.test(df[["RReject_mean"]], df[["Abs_RReject_diff"]], method = "spearman")
+cor.test(df[["SubNum_mean"]], df[["Abs_RReject_diff"]], method = "spearman")
+
+```
+
+
+```{r}
+#| label: rr47_desc_mean_filtered
+#| results: asis
+
+# Loop over each column name
+for (col_name in c("RReject_mean", "SubNum_mean")) {
+  # Generate the child document for the current column
+  child_file <- generate_desc_summary_report(col_name, "df")
+  # Include the child document
+  cat(knitr::knit_child(child_file, quiet = TRUE))
+}
+
+```
+
+#### Scatter plots with linear trend (filtered data points)
+
+```{r}
+#| label: corfigs2
+p0 <- create_histogram(df, "Abs_RReject_diff", 
+                       seq(-75, 100, 5), 
+  "Histogram of RReject1 - abs_risk_rounded, absolute value")
+p6 <- create_histogram(df, "RReject_diff", seq(-75, 100, 5), 
+                 "Histogram of RReject1 - abs_risk_rounded")
+p1 <- create_scatter_with_trend(df, "RReject_mean", "RReject_diff")
+p2 <- create_scatter_with_trend(df, "RReject_mean", "Abs_RReject_diff")
+p3 <- create_scatter_with_trend(df, "RReject_mean", "SubNum_mean")
+p4 <- create_scatter_with_trend(df, "SubNum_mean", "RReject_diff")
+p5 <- create_scatter_with_trend(df, "SubNum_mean", "Abs_RReject_diff")
+
+print(p0)
+print(p6)
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+print(p5)
+
+```
+
+## The Next Steps
+
+```{r}
+#| label: test3
+
+# TODO: Remove subjects with RReject_diff == 0
+# TODO: correlation between Subjective Numeracy and Risk Difference Score (absolute value, original value) 
+# The idea behind this is that it suggests subjects with RReject_diff 0 is a different type of population, using this as a categorical variable 
+
+
+# TODO: attention check, explore correlations between speeder, not use data, etc. 
+
+# TODO:  ~12% (6/49) of those who failed Use_of_Data were speeders, 
+# TODO: and 38% (18/48) of people who have NA marked for Use_of_Data were speeders,
+# TODO: should we mark NA as fails, keep NA in descriptive 
+# TODO: sensitivity anlysis 
+# TODO: attention check, recode NA as fails 
+
+
+# TODO: Research Quesion 1
+
+# TODO: device infomation, device column, or timer for diff pages, 
+# TODO: which column indicates device data, 
+# TODO: checkBOX record device and Operating system, 
+# TODO: web browser info, before sending out the survey
+# TODO: ResultTimer2 is associated with desktop users and
+# TODO: ResultTime3 are associated mobile users
+
+
+# TODO: TRUST scale, trust of healthcare system, race confounder, 
+# TODO: HOW THE TWO TRUST MEASURES CORRELATE, across the whole sample, and with
+# TODO: Race as confounder, simple linear regression, and alpha cronbach 
+
+
+
+```
+
+
+
